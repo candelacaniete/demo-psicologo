@@ -1,11 +1,28 @@
-# demo-psicologo
+# Demo — Dra. Camila Ríos
 
-Demo de venta: web ficticia de la **Dra. Camila Ríos** (psicóloga clínica en Miami), pensada para que psicólogos y terapeutas latinos en USA se vean reflejados en una presencia digital cálida, clínica y fácil de agendar.
+Web demo de venta para mostrar a psicólogos y terapeutas latinos en USA cómo se vería su propia presencia digital.
 
-El proyecto vive en [`demo-psicologa/`](./demo-psicologa).
+## Stack
+
+- Next.js 14 (App Router) + TypeScript
+- Tailwind CSS
+- next/font (Fraunces + Work Sans)
+- Lucide React
+
+## Desarrollo
 
 ```bash
-cd demo-psicologa
 npm install
 npm run dev
 ```
+
+Abrí [http://localhost:3000](http://localhost:3000).
+
+## Build
+
+```bash
+npm run build
+npm start
+```
+
+En Vercel, el **Root Directory** debe ser la raíz del repo (donde está este `package.json`).
