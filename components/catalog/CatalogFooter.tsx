@@ -10,7 +10,7 @@ export default function CatalogFooter() {
           className="flex flex-wrap gap-x-5 gap-y-2 font-vt323 text-sm text-tinta/70 md:text-base"
         >
           <a
-            href="https://www.instagram.com/katem.ar/"
+            href="https://www.instagram.com/katembsas"
             target="_blank"
             rel="noopener noreferrer"
             className="transition-colors hover:text-neon"
