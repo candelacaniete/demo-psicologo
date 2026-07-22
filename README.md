@@ -1,12 +1,17 @@
-# Demo — Dra. Camila Ríos
+# Katem — Catálogo de demos
 
-Web demo de venta para mostrar a psicólogos y terapeutas latinos en USA cómo se vería su propia presencia digital.
+Catálogo de demos web de Katem para profesionales de la salud y el bienestar.
+
+## Rutas
+
+- `/` — home del catálogo (identidad Katem)
+- `/psicologos` — demo ficticia Dra. Camila Ríos (identidad del cliente)
 
 ## Stack
 
 - Next.js 14 (App Router) + TypeScript
 - Tailwind CSS
-- next/font (Fraunces + Work Sans)
+- next/font (Fredoka, Plus Jakarta Sans, VT323 + Fraunces/Work Sans en la demo)
 - Lucide React
 
 ## Desarrollo
@@ -16,13 +21,9 @@ npm install
 npm run dev
 ```
 
-Abrí [http://localhost:3000](http://localhost:3000).
-
 ## Build
 
 ```bash
 npm run build
 npm start
 ```
-
-En Vercel, el **Root Directory** debe ser la raíz del repo (donde está este `package.json`).
