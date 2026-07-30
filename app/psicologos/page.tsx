@@ -7,7 +7,6 @@ import Agendar from "@/components/Agendar";
 import FAQ from "@/components/FAQ";
 import Testimonios from "@/components/Testimonios";
 import Footer from "@/components/Footer";
-import WhatsAppFloat from "@/components/WhatsAppFloat";
 
 export default function PsicologosDemoPage() {
   return (
@@ -23,7 +22,6 @@ export default function PsicologosDemoPage() {
         <Testimonios />
       </main>
       <Footer />
-      <WhatsAppFloat />
     </>
   );
 }
