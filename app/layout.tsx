@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import {
   Fredoka,
   Plus_Jakarta_Sans,
@@ -67,6 +68,10 @@ export default function RootLayout({
     >
       <body className="min-h-screen bg-papel font-jakarta text-tinta antialiased">
         {children}
+        <Script
+          src="https://generador-de-bots.vercel.app/api/widget/d1b73ce9-52c7-4197-8245-9f6c9dad73be"
+          strategy="lazyOnload"
+        />
       </body>
     </html>
   );
