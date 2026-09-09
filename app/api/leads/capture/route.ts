@@ -161,18 +161,16 @@ export async function POST(request: Request) {
 
       // Outside the 24h window Meta only allows approved templates.
       const templateName =
-        process.env.YCLOUD_WELCOME_TEMPLATE_NAME || "hello_world";
+        process.env.YCLOUD_WELCOME_TEMPLATE_NAME || "followuplead";
       const templateLanguage =
-        process.env.YCLOUD_WELCOME_TEMPLATE_LANG || "en";
-      const templateHasNameParam =
-        process.env.YCLOUD_WELCOME_TEMPLATE_HAS_NAME === "true";
+        process.env.YCLOUD_WELCOME_TEMPLATE_LANG || "es";
+      const empresa =
+        process.env.YCLOUD_WELCOME_TEMPLATE_EMPRESA || tenant.name || "Katem";
 
-      await adapter.sendTemplate(
-        phone,
-        templateName,
-        templateLanguage,
-        templateHasNameParam ? [name] : [],
-      );
+      await adapter.sendTemplate(phone, templateName, templateLanguage, [
+        { name: "nombres", text: name },
+        { name: "empresa", text: empresa },
+      ]);
 
       await supabase.from("messages").insert({
         lead_id: lead.id,
@@ -183,6 +181,7 @@ export async function POST(request: Request) {
           tenant_id: tenant.id,
           templateName,
           templateLanguage,
+          variables: { nombres: name, empresa },
         },
       });
     } catch (whatsappError) {

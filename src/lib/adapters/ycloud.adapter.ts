@@ -157,7 +157,7 @@ export class YCloudAdapter {
     to: string,
     templateName: string,
     languageCode: string,
-    bodyParameters: string[] = [],
+    bodyParameters: Array<string | { name: string; text: string }> = [],
   ) {
     const template: Record<string, unknown> = {
       name: templateName,
@@ -168,10 +168,16 @@ export class YCloudAdapter {
       template.components = [
         {
           type: "body",
-          parameters: bodyParameters.map((text) => ({
-            type: "text",
-            text,
-          })),
+          parameters: bodyParameters.map((param) => {
+            if (typeof param === "string") {
+              return { type: "text", text: param };
+            }
+            return {
+              type: "text",
+              parameter_name: param.name,
+              text: param.text,
+            };
+          }),
         },
       ];
     }
