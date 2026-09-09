@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/src/lib/supabase/server";
-import { BotEngine } from "@/src/lib/engine/stateMachine";
 import { isNicheType } from "@/src/config/niches";
-import type { CaptureLeadPayload, Lead, Conversation } from "@/src/types/funnel";
+import {
+  defaultClientIdForNiche,
+  getTenantById,
+} from "@/src/config/tenants";
+import { YCloudAdapter } from "@/src/lib/adapters/ycloud.adapter";
+import type { CaptureLeadPayload, Lead } from "@/src/types/funnel";
 
 function normalizePhone(phone: string, countryCode = "54"): string {
   const digits = phone.replace(/[^\d]/g, "");
@@ -15,6 +19,10 @@ function normalizePhone(phone: string, countryCode = "54"): string {
   return `${countryCode}${digits}`;
 }
 
+function welcomeCopy(name: string, niche: string): string {
+  return `Hola ${name} 👋 Gracias por escribirnos (${niche}). Soy el asistente virtual: contame un poco más de lo que necesitás y te ayudo a orientar la consulta.`;
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Partial<CaptureLeadPayload>;
@@ -23,16 +31,37 @@ export async function POST(request: Request) {
     const niche = body.niche;
     const initialInterest = body.initialInterest?.trim() ?? "";
     const countryCode = body.countryCode?.trim() || "54";
+    const clientId =
+      body.clientId?.trim() ||
+      body.tenantId?.trim() ||
+      (niche && isNicheType(niche) ? defaultClientIdForNiche(niche) : null);
 
-    if (!name || !phoneRaw || !niche) {
+    if (!name || !phoneRaw || !niche || !clientId) {
       return NextResponse.json(
-        { error: "name, phone and niche are required" },
+        { error: "name, phone, niche and clientId are required" },
         { status: 400 },
       );
     }
 
     if (!isNicheType(niche)) {
       return NextResponse.json({ error: "Invalid niche" }, { status: 400 });
+    }
+
+    const tenant = await getTenantById(clientId);
+    if (!tenant) {
+      return NextResponse.json(
+        { error: `Unknown client_id/tenant: ${clientId}` },
+        { status: 404 },
+      );
+    }
+
+    if (tenant.niche !== niche) {
+      return NextResponse.json(
+        {
+          error: `Niche mismatch: tenant ${tenant.id} belongs to ${tenant.niche}`,
+        },
+        { status: 400 },
+      );
     }
 
     const phone = normalizePhone(phoneRaw, countryCode);
@@ -42,6 +71,7 @@ export async function POST(request: Request) {
       .from("leads")
       .upsert(
         {
+          tenant_id: tenant.id,
           name,
           phone,
           niche,
@@ -49,7 +79,7 @@ export async function POST(request: Request) {
           source: "landing",
           initial_interest: initialInterest || null,
         },
-        { onConflict: "phone" },
+        { onConflict: "tenant_id,phone" },
       )
       .select("*")
       .single();
@@ -63,26 +93,17 @@ export async function POST(request: Request) {
 
     const lead = upsertedLead as Lead;
 
-    const { error: deleteConversationError } = await supabase
-      .from("conversations")
-      .delete()
-      .eq("lead_id", lead.id);
-
-    if (deleteConversationError) {
-      return NextResponse.json(
-        { error: deleteConversationError.message },
-        { status: 500 },
-      );
-    }
+    await supabase.from("conversations").delete().eq("lead_id", lead.id);
 
     const { data: conversation, error: conversationError } = await supabase
       .from("conversations")
       .insert({
         lead_id: lead.id,
-        current_step: "welcome",
+        current_step: "ai_agent",
         collected_data: {
           nombre: name,
           initial_interest: initialInterest,
+          tenant_id: tenant.id,
         },
         is_qualified: false,
       })
@@ -104,17 +125,33 @@ export async function POST(request: Request) {
       .update({ status: "IN_QUALIFICATION" })
       .eq("id", lead.id);
 
+    const welcomeText = welcomeCopy(name, niche);
+
     try {
-      await BotEngine.sendWelcome(lead, conversation as Conversation);
+      const adapter = new YCloudAdapter(
+        tenant.ycloud_api_key,
+        tenant.whatsapp_from,
+      );
+      await adapter.sendText(phone, welcomeText);
+      await supabase.from("messages").insert({
+        lead_id: lead.id,
+        sender: "bot",
+        content: welcomeText,
+        raw_payload: {
+          type: "welcome",
+          tenant_id: tenant.id,
+        },
+      });
     } catch (whatsappError) {
       console.error("WhatsApp welcome failed", whatsappError);
       return NextResponse.json(
         {
           ok: true,
           warning:
-            "Lead saved but WhatsApp welcome could not be sent. Check YCLOUD_API_KEY.",
+            "Lead saved but WhatsApp welcome could not be sent. Check tenant YCloud credentials.",
           lead,
           conversation,
+          tenantId: tenant.id,
         },
         { status: 201 },
       );
@@ -125,6 +162,7 @@ export async function POST(request: Request) {
         ok: true,
         lead: { ...lead, status: "IN_QUALIFICATION" },
         conversation,
+        tenantId: tenant.id,
       },
       { status: 201 },
     );

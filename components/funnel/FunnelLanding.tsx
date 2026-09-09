@@ -16,9 +16,14 @@ const COUNTRY_CODES = [
 type FunnelLandingProps = {
   niche: NicheType;
   config: NicheConfig;
+  clientId: string;
 };
 
-export default function FunnelLanding({ niche, config }: FunnelLandingProps) {
+export default function FunnelLanding({
+  niche,
+  config,
+  clientId,
+}: FunnelLandingProps) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -56,6 +61,7 @@ export default function FunnelLanding({ niche, config }: FunnelLandingProps) {
           niche,
           initialInterest,
           countryCode,
+          clientId,
         }),
       });
 
@@ -93,9 +99,10 @@ export default function FunnelLanding({ niche, config }: FunnelLandingProps) {
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-5 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-              Funnel multi-nicho
+              Funnel multi-tenant
             </p>
             <p className="mt-1 text-lg font-semibold tracking-tight">Katem Demo Lab</p>
+            <p className="mt-1 font-mono text-xs text-zinc-500">client_id: {clientId}</p>
           </div>
           <nav
             aria-label="Nichos"

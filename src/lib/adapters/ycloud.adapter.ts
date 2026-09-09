@@ -27,37 +27,41 @@ type YCloudWebhookBody = {
   data?: YCloudIncomingMessage;
 };
 
-function getApiKey(): string {
-  const key = process.env.YCLOUD_API_KEY;
-  if (!key) {
-    throw new Error("Missing YCLOUD_API_KEY");
-  }
-  return key;
-}
-
-async function ycloudFetch(path: string, body: Record<string, unknown>) {
-  const response = await fetch(`${YCLOUD_API_BASE}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-API-Key": getApiKey(),
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`YCloud API error (${response.status}): ${errorText}`);
-  }
-
-  return response.json() as Promise<Record<string, unknown>>;
-}
-
 function normalizePhone(phone: string): string {
   return phone.replace(/[^\d]/g, "");
 }
 
 export class YCloudAdapter {
+  private readonly apiKey: string;
+  private readonly fromNumber: string;
+
+  constructor(apiKey?: string, fromNumber?: string) {
+    this.apiKey = apiKey || process.env.YCLOUD_API_KEY || "";
+    this.fromNumber = fromNumber || process.env.YCLOUD_WHATSAPP_FROM || "";
+
+    if (!this.apiKey) {
+      throw new Error("Missing YCloud API key for tenant");
+    }
+  }
+
+  private async request(path: string, body: Record<string, unknown>) {
+    const response = await fetch(`${YCLOUD_API_BASE}${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-Key": this.apiKey,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`YCloud API error (${response.status}): ${errorText}`);
+    }
+
+    return response.json() as Promise<Record<string, unknown>>;
+  }
+
   static parseWebhook(body: unknown): StandardMessage | null {
     const payload = body as YCloudWebhookBody;
     const message = payload.whatsappMessage ?? payload.data;
@@ -131,18 +135,18 @@ export class YCloudAdapter {
     };
   }
 
-  static async sendText(to: string, text: string) {
-    return ycloudFetch("/whatsapp/messages", {
-      from: process.env.YCLOUD_WHATSAPP_FROM,
+  async sendText(to: string, text: string) {
+    return this.request("/whatsapp/messages", {
+      from: this.fromNumber,
       to: normalizePhone(to),
       type: "text",
       text: { body: text },
     });
   }
 
-  static async sendButtons(to: string, bodyText: string, buttons: YCloudButton[]) {
-    return ycloudFetch("/whatsapp/messages", {
-      from: process.env.YCLOUD_WHATSAPP_FROM,
+  async sendButtons(to: string, bodyText: string, buttons: YCloudButton[]) {
+    return this.request("/whatsapp/messages", {
+      from: this.fromNumber,
       to: normalizePhone(to),
       type: "interactive",
       interactive: {
@@ -161,14 +165,14 @@ export class YCloudAdapter {
     });
   }
 
-  static async sendList(
+  async sendList(
     to: string,
     bodyText: string,
     buttonText: string,
     sections: YCloudListSection[],
   ) {
-    return ycloudFetch("/whatsapp/messages", {
-      from: process.env.YCLOUD_WHATSAPP_FROM,
+    return this.request("/whatsapp/messages", {
+      from: this.fromNumber,
       to: normalizePhone(to),
       type: "interactive",
       interactive: {
@@ -187,5 +191,27 @@ export class YCloudAdapter {
         },
       },
     });
+  }
+
+  /** Backward-compatible static helpers using process.env */
+  static async sendText(to: string, text: string) {
+    return new YCloudAdapter().sendText(to, text);
+  }
+
+  static async sendButtons(
+    to: string,
+    bodyText: string,
+    buttons: YCloudButton[],
+  ) {
+    return new YCloudAdapter().sendButtons(to, bodyText, buttons);
+  }
+
+  static async sendList(
+    to: string,
+    bodyText: string,
+    buttonText: string,
+    sections: YCloudListSection[],
+  ) {
+    return new YCloudAdapter().sendList(to, bodyText, buttonText, sections);
   }
 }

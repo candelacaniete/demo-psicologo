@@ -15,6 +15,7 @@ export type MessageSender = "user" | "bot";
 export interface Lead {
   id: string;
   created_at: string;
+  tenant_id: string;
   name: string;
   phone: string;
   niche: NicheType;
@@ -72,6 +73,8 @@ export interface CaptureLeadPayload {
   niche: NicheType;
   initialInterest: string;
   countryCode?: string;
+  clientId?: string;
+  tenantId?: string;
 }
 
 export interface StandardMessage {
