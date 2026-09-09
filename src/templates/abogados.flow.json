@@ -1,0 +1,82 @@
+{
+  "niche": "abogados",
+  "name": "Calificación estudio jurídico",
+  "welcomeStepId": "welcome",
+  "steps": [
+    {
+      "id": "welcome",
+      "botMessage": "Hola {{collected_data.nombre}}. Soy el asistente del estudio jurídico. ¿En qué área necesitás ayuda?",
+      "inputType": "list",
+      "saveAs": "area_legal",
+      "listButtonText": "Áreas",
+      "listSections": [
+        {
+          "title": "Área legal",
+          "rows": [
+            { "id": "corporativo", "title": "Corporativo", "description": "Sociedades y contratos" },
+            { "id": "civil", "title": "Civil", "description": "Familia, daños, contratos" },
+            { "id": "penal", "title": "Penal", "description": "Defensa y denuncias" }
+          ]
+        }
+      ],
+      "nextStep": "urgencia"
+    },
+    {
+      "id": "urgencia",
+      "botMessage": "¿Qué tan urgente es tu caso?",
+      "inputType": "buttons",
+      "saveAs": "urgencia",
+      "options": [
+        { "id": "alta", "title": "Alta" },
+        { "id": "media", "title": "Media" },
+        { "id": "baja", "title": "Baja" }
+      ],
+      "nextStepMap": {
+        "alta": "abono",
+        "media": "abono",
+        "baja": "abono"
+      }
+    },
+    {
+      "id": "abono",
+      "botMessage": "Para avanzar, ¿cuál es tu capacidad de abono mensual aproximada (USD)?",
+      "inputType": "list",
+      "saveAs": "abono_mensual_usd",
+      "listButtonText": "Ver montos",
+      "listSections": [
+        {
+          "title": "Abono mensual",
+          "rows": [
+            { "id": "200", "title": "USD 200" },
+            { "id": "500", "title": "USD 500" },
+            { "id": "1000", "title": "USD 1.000+" },
+            { "id": "2000", "title": "USD 2.000+" }
+          ]
+        }
+      ],
+      "qualificationRules": [
+        {
+          "field": "area_legal",
+          "operator": "in",
+          "value": ["corporativo", "civil", "penal"],
+          "onMatchStatus": "IN_QUALIFICATION"
+        },
+        {
+          "field": "abono_mensual_usd",
+          "operator": "gte",
+          "value": 500,
+          "onMatchStatus": "QUALIFIED_HOT",
+          "onFailStatus": "DISCARDED"
+        }
+      ],
+      "nextStep": "cierre"
+    },
+    {
+      "id": "cierre",
+      "botMessage": "Gracias {{collected_data.nombre}}. Tomamos tu consulta de {{collected_data.area_legal}} con urgencia {{collected_data.urgencia}}. Un abogado te contactará.",
+      "inputType": "none",
+      "end": true,
+      "nextStep": null
+    }
+  ]
+}

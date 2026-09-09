@@ -1,0 +1,72 @@
+{
+  "niche": "hospedajes",
+  "name": "Calificación hospedaje boutique",
+  "welcomeStepId": "welcome",
+  "steps": [
+    {
+      "id": "welcome",
+      "botMessage": "Hola {{collected_data.nombre}} ✨ Bienvenido/a. ¿Tu viaje es de placer o corporativo?",
+      "inputType": "buttons",
+      "saveAs": "tipo_viaje",
+      "options": [
+        { "id": "placer", "title": "Placer" },
+        { "id": "corporativo", "title": "Corporativo" }
+      ],
+      "nextStepMap": {
+        "placer": "noches",
+        "corporativo": "noches"
+      }
+    },
+    {
+      "id": "noches",
+      "botMessage": "¿Cuántas noches te gustaría hospedarte?",
+      "inputType": "list",
+      "saveAs": "cantidad_noches",
+      "listButtonText": "Noches",
+      "listSections": [
+        {
+          "title": "Estadía",
+          "rows": [
+            { "id": "1", "title": "1 noche" },
+            { "id": "2", "title": "2 noches" },
+            { "id": "3", "title": "3 noches" },
+            { "id": "7", "title": "7+ noches" }
+          ]
+        }
+      ],
+      "qualificationRules": [
+        {
+          "field": "cantidad_noches",
+          "operator": "gte",
+          "value": 2,
+          "onMatchStatus": "QUALIFIED_HOT",
+          "onFailStatus": "IN_QUALIFICATION"
+        }
+      ],
+      "nextStep": "huespedes"
+    },
+    {
+      "id": "huespedes",
+      "botMessage": "Indicá fechas tentativas y cantidad de huéspedes (ej: 12/10 al 15/10 · 2 adultos).",
+      "inputType": "text",
+      "saveAs": "fechas_huespedes",
+      "nextStep": "cierre",
+      "qualificationRules": [
+        {
+          "field": "cantidad_noches",
+          "operator": "gte",
+          "value": 2,
+          "onMatchStatus": "QUALIFIED_HOT",
+          "onFailStatus": "DISCARDED"
+        }
+      ]
+    },
+    {
+      "id": "cierre",
+      "botMessage": "Perfecto {{collected_data.nombre}}. Registramos tu viaje {{collected_data.tipo_viaje}} por {{collected_data.cantidad_noches}} noche(s). Te enviamos disponibilidad en breve.",
+      "inputType": "none",
+      "end": true,
+      "nextStep": null
+    }
+  ]
+}
