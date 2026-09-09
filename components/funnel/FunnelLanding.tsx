@@ -68,6 +68,8 @@ export default function FunnelLanding({
       const payload = (await response.json()) as {
         error?: string;
         warning?: string;
+        whatsappError?: string;
+        debug?: Record<string, unknown>;
         ok?: boolean;
       };
 
@@ -75,10 +77,17 @@ export default function FunnelLanding({
         throw new Error(payload.error ?? "No se pudo guardar el lead");
       }
 
-      setFeedback(
-        payload.warning ??
+      if (payload.warning) {
+        setFeedback(
+          `${payload.warning}${
+            payload.whatsappError ? ` Detalle: ${payload.whatsappError}` : ""
+          }`,
+        );
+      } else {
+        setFeedback(
           "Listo. Te vamos a escribir por WhatsApp en unos minutos.",
-      );
+        );
+      }
       setName("");
       setPhone("");
       setInitialInterest("");

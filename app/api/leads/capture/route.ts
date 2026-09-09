@@ -128,9 +128,17 @@ export async function POST(request: Request) {
     const welcomeText = welcomeCopy(name, niche);
 
     try {
+      if (!tenant.ycloud_api_key || !tenant.whatsapp_from) {
+        throw new Error(
+          "Tenant missing YCloud credentials. Set YCLOUD_API_KEY and YCLOUD_WHATSAPP_FROM in Vercel, or UPDATE tenants in Supabase.",
+        );
+      }
+
       const adapter = new YCloudAdapter(
         tenant.ycloud_api_key,
-        tenant.whatsapp_from,
+        tenant.whatsapp_from.startsWith("+")
+          ? tenant.whatsapp_from
+          : `+${tenant.whatsapp_from.replace(/[^\d]/g, "")}`,
       );
       await adapter.sendText(phone, welcomeText);
       await supabase.from("messages").insert({
@@ -143,12 +151,25 @@ export async function POST(request: Request) {
         },
       });
     } catch (whatsappError) {
+      const detail =
+        whatsappError instanceof Error
+          ? whatsappError.message
+          : "Unknown WhatsApp error";
       console.error("WhatsApp welcome failed", whatsappError);
       return NextResponse.json(
         {
           ok: true,
           warning:
             "Lead saved but WhatsApp welcome could not be sent. Check tenant YCloud credentials.",
+          whatsappError: detail,
+          debug: {
+            tenantId: tenant.id,
+            hasApiKey: Boolean(tenant.ycloud_api_key),
+            whatsappFrom: tenant.whatsapp_from
+              ? `${tenant.whatsapp_from.slice(0, 4)}…`
+              : null,
+            toPhone: phone,
+          },
           lead,
           conversation,
           tenantId: tenant.id,

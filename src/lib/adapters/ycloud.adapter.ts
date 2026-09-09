@@ -28,7 +28,8 @@ type YCloudWebhookBody = {
 };
 
 function normalizePhone(phone: string): string {
-  return phone.replace(/[^\d]/g, "");
+  const digits = phone.replace(/[^\d]/g, "");
+  return digits ? `+${digits}` : "";
 }
 
 export class YCloudAdapter {
@@ -37,10 +38,18 @@ export class YCloudAdapter {
 
   constructor(apiKey?: string, fromNumber?: string) {
     this.apiKey = apiKey || process.env.YCLOUD_API_KEY || "";
-    this.fromNumber = fromNumber || process.env.YCLOUD_WHATSAPP_FROM || "";
+    const rawFrom = fromNumber || process.env.YCLOUD_WHATSAPP_FROM || "";
+    this.fromNumber = rawFrom
+      ? rawFrom.startsWith("+")
+        ? rawFrom
+        : `+${rawFrom.replace(/[^\d]/g, "")}`
+      : "";
 
     if (!this.apiKey) {
       throw new Error("Missing YCloud API key for tenant");
+    }
+    if (!this.fromNumber) {
+      throw new Error("Missing YCloud WhatsApp From number for tenant");
     }
   }
 

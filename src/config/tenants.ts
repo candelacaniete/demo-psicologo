@@ -67,6 +67,10 @@ export function resolveClientId(
 export async function getTenantById(
   tenantId: string,
 ): Promise<TenantRecord | null> {
+  const seed = DEMO_TENANTS[tenantId] ?? null;
+  const envApiKey = process.env.YCLOUD_API_KEY ?? "";
+  const envFrom = process.env.YCLOUD_WHATSAPP_FROM ?? "";
+
   try {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
@@ -76,13 +80,39 @@ export async function getTenantById(
       .maybeSingle();
 
     if (!error && data) {
-      return data as TenantRecord;
+      const row = data as TenantRecord;
+      const apiKeyLooksFake =
+        !row.ycloud_api_key ||
+        row.ycloud_api_key === "REPLACE_ME" ||
+        row.ycloud_api_key.includes("REPLACE");
+      const fromLooksFake =
+        !row.whatsapp_from ||
+        row.whatsapp_from === "REPLACE_ME" ||
+        row.whatsapp_from.includes("REPLACE");
+
+      return {
+        ...row,
+        ycloud_api_key: apiKeyLooksFake
+          ? envApiKey || seed?.ycloud_api_key || ""
+          : row.ycloud_api_key,
+        whatsapp_from: fromLooksFake
+          ? envFrom || seed?.whatsapp_from || ""
+          : row.whatsapp_from.replace(/[^\d+]/g, ""),
+      };
     }
   } catch {
     // Fall back to demo seed when DB/table is not ready.
   }
 
-  return DEMO_TENANTS[tenantId] ?? null;
+  if (!seed) {
+    return null;
+  }
+
+  return {
+    ...seed,
+    ycloud_api_key: seed.ycloud_api_key || envApiKey,
+    whatsapp_from: (seed.whatsapp_from || envFrom).replace(/[^\d+]/g, ""),
+  };
 }
 
 export async function getTenantByWhatsAppFrom(
