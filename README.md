@@ -20,12 +20,31 @@
 
 ## Setup
 
+Dominio de producción: **https://katem.store**
+
 ```bash
 cp .env.example .env.local
 # completar Supabase + YCLOUD_* + OPENAI_API_KEY
 ```
 
-Ejecutá `supabase/schema.sql` y apuntá el webhook YCloud a `/api/webhooks/ycloud`.
+1. Ejecutá `supabase/schema.sql` en Supabase.
+2. En YCloud, apuntá el webhook de mensajes entrantes a:
+
+```text
+https://katem.store/api/webhooks/ycloud
+```
+
+3. Probá la landing:
+
+```text
+https://katem.store/funnel?nicho=inmobiliaria&client_id=sec_inmobiliaria_123
+```
+
+4. Dashboard:
+
+```text
+https://katem.store/admin
+```
 
 ```bash
 npm install
