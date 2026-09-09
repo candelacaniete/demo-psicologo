@@ -1,0 +1,79 @@
+{
+  "niche": "arquitectos",
+  "name": "Calificación estudio de arquitectura",
+  "welcomeStepId": "welcome",
+  "steps": [
+    {
+      "id": "welcome",
+      "botMessage": "Hola {{collected_data.nombre}}, soy el asistente del estudio. ¿Qué tipo de proyecto tenés en mente?",
+      "inputType": "buttons",
+      "saveAs": "tipo_proyecto",
+      "options": [
+        { "id": "obra_nueva", "title": "Obra nueva" },
+        { "id": "remodelacion", "title": "Remodelación" }
+      ],
+      "nextStepMap": {
+        "obra_nueva": "metros",
+        "remodelacion": "metros"
+      }
+    },
+    {
+      "id": "metros",
+      "botMessage": "¿Cuántos metros cuadrados aproximados tiene el proyecto?",
+      "inputType": "list",
+      "saveAs": "metros_cuadrados",
+      "listButtonText": "Elegir m²",
+      "listSections": [
+        {
+          "title": "Superficie",
+          "rows": [
+            { "id": "60", "title": "Hasta 60 m²" },
+            { "id": "100", "title": "100 m²" },
+            { "id": "180", "title": "180 m²" },
+            { "id": "300", "title": "300 m²+" }
+          ]
+        }
+      ],
+      "qualificationRules": [
+        {
+          "field": "metros_cuadrados",
+          "operator": "gte",
+          "value": 100,
+          "onMatchStatus": "QUALIFIED_HOT",
+          "onFailStatus": "IN_QUALIFICATION"
+        }
+      ],
+      "nextStep": "terreno"
+    },
+    {
+      "id": "terreno",
+      "botMessage": "¿Ya tenés terreno propio?",
+      "inputType": "buttons",
+      "saveAs": "terreno_propio",
+      "options": [
+        { "id": "si", "title": "Sí" },
+        { "id": "no", "title": "No" }
+      ],
+      "nextStepMap": {
+        "si": "cierre",
+        "no": "cierre"
+      },
+      "qualificationRules": [
+        {
+          "field": "metros_cuadrados",
+          "operator": "gte",
+          "value": 100,
+          "onMatchStatus": "QUALIFIED_HOT",
+          "onFailStatus": "DISCARDED"
+        }
+      ]
+    },
+    {
+      "id": "cierre",
+      "botMessage": "Listo {{collected_data.nombre}}. Anotamos tu proyecto de {{collected_data.tipo_proyecto}} ({{collected_data.metros_cuadrados}} m²). El equipo te escribe pronto.",
+      "inputType": "none",
+      "end": true,
+      "nextStep": null
+    }
+  ]
+}

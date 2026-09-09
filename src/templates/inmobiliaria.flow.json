@@ -1,0 +1,72 @@
+{
+  "niche": "inmobiliaria",
+  "name": "Calificación inmobiliaria",
+  "welcomeStepId": "welcome",
+  "steps": [
+    {
+      "id": "welcome",
+      "botMessage": "Hola {{collected_data.nombre}} 👋 Soy el asistente de la inmobiliaria. ¿Qué operación te interesa?",
+      "inputType": "buttons",
+      "saveAs": "operacion",
+      "options": [
+        { "id": "comprar", "title": "Comprar" },
+        { "id": "alquilar", "title": "Alquilar" }
+      ],
+      "nextStepMap": {
+        "comprar": "presupuesto",
+        "alquilar": "presupuesto"
+      }
+    },
+    {
+      "id": "presupuesto",
+      "botMessage": "Perfecto. ¿Cuál es tu presupuesto aproximado en USD?",
+      "inputType": "list",
+      "saveAs": "presupuesto_usd",
+      "listButtonText": "Ver rangos",
+      "listSections": [
+        {
+          "title": "Presupuesto",
+          "rows": [
+            { "id": "30000", "title": "Hasta USD 30.000", "description": "Entrada inicial baja" },
+            { "id": "50000", "title": "USD 50.000", "description": "Rango medio" },
+            { "id": "100000", "title": "USD 100.000+", "description": "Alta capacidad" },
+            { "id": "200000", "title": "USD 200.000+", "description": "Premium" }
+          ]
+        }
+      ],
+      "qualificationRules": [
+        {
+          "field": "presupuesto_usd",
+          "operator": "gte",
+          "value": 50000,
+          "onMatchStatus": "QUALIFIED_HOT",
+          "onFailStatus": "IN_QUALIFICATION"
+        }
+      ],
+      "nextStep": "zona"
+    },
+    {
+      "id": "zona",
+      "botMessage": "¿En qué zona te gustaría buscar? Escribí barrio o ciudad.",
+      "inputType": "text",
+      "saveAs": "zona",
+      "nextStep": "cierre",
+      "qualificationRules": [
+        {
+          "field": "presupuesto_usd",
+          "operator": "gte",
+          "value": 50000,
+          "onMatchStatus": "QUALIFIED_HOT",
+          "onFailStatus": "DISCARDED"
+        }
+      ]
+    },
+    {
+      "id": "cierre",
+      "botMessage": "Gracias {{collected_data.nombre}}. Registramos tu interés en {{collected_data.operacion}} en {{collected_data.zona}}. Un asesor te contacta en breve.",
+      "inputType": "none",
+      "end": true,
+      "nextStep": null
+    }
+  ]
+}
