@@ -164,8 +164,8 @@ export async function POST(request: Request) {
         process.env.YCLOUD_WELCOME_TEMPLATE_NAME || "followuplead";
       const templateLanguage =
         process.env.YCLOUD_WELCOME_TEMPLATE_LANG || "es";
-      const empresa =
-        process.env.YCLOUD_WELCOME_TEMPLATE_EMPRESA || tenant.name || "Katem";
+      // {{empresa}} = nombre del tenant/cliente, no un valor fijo de Katem
+      const empresa = tenant.name;
 
       await adapter.sendTemplate(phone, templateName, templateLanguage, [
         { name: "nombres", text: name },
