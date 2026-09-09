@@ -153,6 +153,37 @@ export class YCloudAdapter {
     });
   }
 
+  async sendTemplate(
+    to: string,
+    templateName: string,
+    languageCode: string,
+    bodyParameters: string[] = [],
+  ) {
+    const template: Record<string, unknown> = {
+      name: templateName,
+      language: { code: languageCode },
+    };
+
+    if (bodyParameters.length > 0) {
+      template.components = [
+        {
+          type: "body",
+          parameters: bodyParameters.map((text) => ({
+            type: "text",
+            text,
+          })),
+        },
+      ];
+    }
+
+    return this.request("/whatsapp/messages", {
+      from: this.fromNumber,
+      to: normalizePhone(to),
+      type: "template",
+      template,
+    });
+  }
+
   async sendButtons(to: string, bodyText: string, buttons: YCloudButton[]) {
     return this.request("/whatsapp/messages", {
       from: this.fromNumber,

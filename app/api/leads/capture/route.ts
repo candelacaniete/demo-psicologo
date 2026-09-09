@@ -9,7 +9,25 @@ import { YCloudAdapter } from "@/src/lib/adapters/ycloud.adapter";
 import type { CaptureLeadPayload, Lead } from "@/src/types/funnel";
 
 function normalizePhone(phone: string, countryCode = "54"): string {
-  const digits = phone.replace(/[^\d]/g, "");
+  let digits = phone.replace(/[^\d]/g, "");
+
+  // Argentina mobiles need +54 9 ...
+  if (countryCode === "54") {
+    if (digits.startsWith("549")) {
+      return digits;
+    }
+    if (digits.startsWith("54") && !digits.startsWith("549")) {
+      return `549${digits.slice(2)}`;
+    }
+    if (digits.startsWith("9")) {
+      return `54${digits}`;
+    }
+    if (digits.startsWith("0")) {
+      digits = digits.replace(/^0+/, "");
+    }
+    return `549${digits}`;
+  }
+
   if (digits.startsWith(countryCode)) {
     return digits;
   }
@@ -140,14 +158,31 @@ export async function POST(request: Request) {
           ? tenant.whatsapp_from
           : `+${tenant.whatsapp_from.replace(/[^\d]/g, "")}`,
       );
-      await adapter.sendText(phone, welcomeText);
+
+      // Outside the 24h window Meta only allows approved templates.
+      const templateName =
+        process.env.YCLOUD_WELCOME_TEMPLATE_NAME || "hello_world";
+      const templateLanguage =
+        process.env.YCLOUD_WELCOME_TEMPLATE_LANG || "en";
+      const templateHasNameParam =
+        process.env.YCLOUD_WELCOME_TEMPLATE_HAS_NAME === "true";
+
+      await adapter.sendTemplate(
+        phone,
+        templateName,
+        templateLanguage,
+        templateHasNameParam ? [name] : [],
+      );
+
       await supabase.from("messages").insert({
         lead_id: lead.id,
         sender: "bot",
         content: welcomeText,
         raw_payload: {
-          type: "welcome",
+          type: "welcome_template",
           tenant_id: tenant.id,
+          templateName,
+          templateLanguage,
         },
       });
     } catch (whatsappError) {
@@ -160,7 +195,7 @@ export async function POST(request: Request) {
         {
           ok: true,
           warning:
-            "Lead saved but WhatsApp welcome could not be sent. Check tenant YCloud credentials.",
+            "Lead saved but WhatsApp welcome could not be sent. If error 131047, use an approved template outside the 24h window.",
           whatsappError: detail,
           debug: {
             tenantId: tenant.id,
