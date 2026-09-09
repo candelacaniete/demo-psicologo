@@ -238,6 +238,7 @@ export default function AdminDashboard() {
                 <thead className="bg-zinc-950/60 text-zinc-400">
                   <tr>
                     <th className="px-5 py-3 font-medium">Nombre</th>
+                    <th className="px-5 py-3 font-medium">Tenant</th>
                     <th className="px-5 py-3 font-medium">Teléfono</th>
                     <th className="px-5 py-3 font-medium">Nicho</th>
                     <th className="px-5 py-3 font-medium">Estado</th>
@@ -253,6 +254,9 @@ export default function AdminDashboard() {
                     >
                       <td className="px-5 py-3 font-medium text-white">
                         {lead.name}
+                      </td>
+                      <td className="px-5 py-3 font-mono text-xs text-zinc-400">
+                        {lead.tenant_id}
                       </td>
                       <td className="px-5 py-3">{lead.phone}</td>
                       <td className="px-5 py-3 capitalize">{lead.niche}</td>
