@@ -105,7 +105,7 @@ export default function FunnelLanding({
       setFeedback(
         payload.templateSent
           ? "Revisá WhatsApp: ya te enviamos el primer mensaje."
-          : "Tu consulta quedó registrada. Continuá por WhatsApp para hablar con el equipo.",
+          : "Tu consulta quedó registrada. Abrí WhatsApp, enviá el mensaje listo y te respondemos al instante.",
       );
       setWhatsappDeepLink(payload.whatsappDeepLink ?? null);
       setName("");
@@ -193,12 +193,12 @@ export default function FunnelLanding({
               <h2 className="text-xl font-semibold tracking-tight">
                 {templateSent
                   ? "Te escribimos por WhatsApp"
-                  : "Recibimos tu consulta"}
+                  : "Un paso más: abrí WhatsApp"}
               </h2>
               <p className="text-sm leading-relaxed text-zinc-600">
                 {templateSent
                   ? "Revisá tus mensajes: ya salió el primer contacto. Cuando respondas, seguimos por ahí."
-                  : "Si querés seguir ahora, abrí WhatsApp y enviá el mensaje precargado."}
+                  : "El mensaje ya lleva tus datos del formulario. Al enviarlo, se abre la conversación y te respondemos."}
               </p>
               {whatsappDeepLink ? (
                 <a
@@ -207,7 +207,7 @@ export default function FunnelLanding({
                   rel="noopener noreferrer"
                   className="inline-flex w-full items-center justify-center rounded-xl bg-[#25D366] px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-[#1ebe57]"
                 >
-                  {templateSent ? "Abrir WhatsApp" : "Continuar por WhatsApp"}
+                  {templateSent ? "Abrir WhatsApp" : "Enviar por WhatsApp"}
                 </a>
               ) : null}
               {feedback ? (

@@ -110,12 +110,12 @@ export async function POST(request: Request) {
 
     await supabase.from("conversations").delete().eq("lead_id", lead.id);
 
-    // Plan A default: try template unless explicitly opted out.
-    // Plan B fallback: wa.me if template fails / is skipped.
+    // Default Plan B: client opens WhatsApp first (wa.me) → 24h window → AI agent.
+    // Optional Plan A: WHATSAPP_HANDSHAKE_MODE=template (needs Meta display name + approved template).
     const configuredMode = (
-      process.env.WHATSAPP_HANDSHAKE_MODE || "template"
+      process.env.WHATSAPP_HANDSHAKE_MODE || "user_initiated"
     ).toLowerCase();
-    const preferTemplate = configuredMode !== "user_initiated";
+    const preferTemplate = configuredMode === "template";
 
     const collectedData = {
       nombre: name,
@@ -172,7 +172,6 @@ export async function POST(request: Request) {
     const templateCategory =
       process.env.YCLOUD_WELCOME_TEMPLATE_CATEGORY || "MARKETING";
 
-    // Marketing templates consume daily/quality limits — skip cold only.
     if (preferTemplate && qualification.status === "DISCARDED") {
       templateSkipped = true;
     } else if (preferTemplate) {
@@ -194,13 +193,11 @@ export async function POST(request: Request) {
       } catch (error) {
         templateError =
           error instanceof Error ? error.message : "Template send failed";
-        console.error("Template welcome failed; falling back to wa.me", {
+        console.error("Template welcome failed; using wa.me handshake", {
           templateError,
           templateName,
-          templateLanguage,
           phone,
           tenantId: tenant.id,
-          from: tenant.whatsapp_from,
         });
       }
     }
@@ -216,7 +213,7 @@ export async function POST(request: Request) {
           template_sent: templateSent,
           template_error: templateError,
           template_skipped: templateSkipped,
-          template_name: templateName,
+          template_name: preferTemplate ? templateName : null,
         },
       })
       .eq("id", conversation.id);
@@ -225,8 +222,8 @@ export async function POST(request: Request) {
       lead_id: lead.id,
       sender: "bot",
       content: templateSent
-        ? `Lead calificado. Score ${qualification.score} → ${qualification.status}. Template ${templateName} (${templateCategory}) enviado.`
-        : `Lead calificado. Score ${qualification.score} → ${qualification.status}. Continuidad por wa.me${templateError ? ` (template falló)` : templateSkipped ? ` (template omitido)` : ""}.`,
+        ? `Consulta calificada (${qualification.status}). Template ${templateName} enviado.`
+        : `Consulta calificada (${qualification.status}). Esperando primer mensaje del cliente por WhatsApp.`,
       raw_payload: {
         type: "form_qualification",
         tenant_id: tenant.id,
@@ -236,11 +233,12 @@ export async function POST(request: Request) {
         collectedData: qualification.collectedData,
         whatsappDeepLink,
         handshakeMode: effectiveHandshake,
+        handshakeMessage,
         templateSent,
         templateSkipped,
         templateError,
-        templateName,
-        templateCategory,
+        templateName: preferTemplate ? templateName : null,
+        templateCategory: preferTemplate ? templateCategory : null,
       },
     });
 
@@ -253,8 +251,6 @@ export async function POST(request: Request) {
         templateSent,
         templateSkipped,
         templateError,
-        templateName,
-        templateCategory,
         qualification: {
           score: qualification.score,
           status: qualification.status,

@@ -228,17 +228,17 @@ export default function ConversionLanding({
             {submitted ? (
               <div className="space-y-4">
                 <p className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${theme.accentSoft}`}>
-                  {templateSent ? "WhatsApp enviado" : "Consulta recibida"}
+                  Consulta recibida
                 </p>
                 <h2 className="font-fraunces text-2xl tracking-tight">
                   {templateSent
                     ? "Te escribimos por WhatsApp"
-                    : "Recibimos tu consulta"}
+                    : "Un paso más: abrí WhatsApp"}
                 </h2>
                 <p className={`text-sm leading-relaxed ${theme.muted}`}>
                   {templateSent
                     ? `${resultCopy} Revisá tus mensajes: ya te llegó el primer contacto.`
-                    : resultCopy}
+                    : `${resultCopy} Tocá el botón: el mensaje ya lleva tus datos. Al enviarlo, te respondemos al instante.`}
                 </p>
                 {whatsappDeepLink ? (
                   <a
@@ -256,18 +256,14 @@ export default function ConversionLanding({
                   >
                     {templateSent
                       ? "Abrir WhatsApp"
-                      : "Continuar por WhatsApp"}
+                      : "Enviar por WhatsApp"}
                   </a>
                 ) : null}
-                {templateSent ? (
-                  <p className={`text-center text-xs ${theme.muted}`}>
-                    Si no ves el mensaje, abrí WhatsApp o revisá la carpeta de filtros.
-                  </p>
-                ) : (
-                  <p className={`text-center text-xs ${theme.muted}`}>
-                    Tocá el botón para abrir el chat con el mensaje listo.
-                  </p>
-                )}
+                <p className={`text-center text-xs ${theme.muted}`}>
+                  {templateSent
+                    ? "Si no ves el mensaje, abrí WhatsApp o revisá la carpeta de filtros."
+                    : "Se abre WhatsApp con el texto listo: solo tenés que enviar."}
+                </p>
                 <button
                   type="button"
                   className={`text-sm ${theme.muted} underline-offset-2 hover:underline`}

@@ -2,63 +2,40 @@
 
 Dominio raíz: **katem.store**
 
-## Producto
+## Flujo WhatsApp (Plan B — activo)
 
-Landings de conversión por vertical con:
+Sin plantillas ni display name de Meta:
 
-1. Formulario en **2 pasos** (calificación + contacto)
-2. Score HOT / WARM / COLD guardado en Supabase
-3. Primer contacto por **plantilla WhatsApp** (aprobada) + continuidad IA
-4. Tracking de embudo (`funnel_events`) + admin realtime
+1. Lead completa el form (calificación HOT/WARM/COLD en DB)  
+2. CTA **Enviar por WhatsApp** (`wa.me` con mensaje precargado)  
+3. El cliente **envía** ese mensaje → se abre ventana 24h  
+4. Webhook YCloud → agente IA responde en texto libre  
 
-## Handshake WhatsApp (Plan A activo)
+`WHATSAPP_HANDSHAKE_MODE=user_initiated`
 
-Con cuenta de empresa verificada + plantilla **Approved** (aunque sea categoría **MARKETING**):
+Más adelante (cuando Meta termine display name): `=template`.
 
-1. Lead completa el form → calificación en DB  
-2. El backend envía `followuplead` por YCloud (`nombres`, `empresa`)  
-3. El lead responde → se abre ventana 24h → agente IA en texto libre  
+## Env en Vercel
 
-`WHATSAPP_HANDSHAKE_MODE=template` (default).
+Ver `.env.example`. Mínimo:
 
-- Si el template falla → fallback automático a `wa.me`
-- Leads `DISCARDED` no consumen plantilla marketing (límite de calidad/volumen)
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` → **publishable** (`sb_publishable_...`)
+- `SUPABASE_SERVICE_ROLE_KEY` → **secret** (`sb_secret_...`)
+- `YCLOUD_API_KEY` / `YCLOUD_WHATSAPP_FROM`
+- `WHATSAPP_HANDSHAKE_MODE=user_initiated`
+- `OPENAI_API_KEY` / `OPENAI_MODEL`
+- `NEXT_PUBLIC_ROOT_DOMAIN=katem.store`
 
-Marketing vs Utility: para follow-up de leads Meta suele clasificar como Marketing. Funciona igual para abrir la conversación; solo cambia pricing/límites de mensajería marketing.
+Webhook YCloud: `https://katem.store/api/webhooks/ycloud`  
+evento: `whatsapp.inbound_message.received`
+
+## SQL Supabase
+
+1. `supabase/schema.sql` (si es proyecto nuevo)  
+2. `supabase/migration_multidomain.sql`  
+3. `supabase/migration_funnel_events.sql`
 
 ## Rutas
 
-| Ruta | Qué es |
-|---|---|
-| `/` | Hub de landings + link a Admin |
-| `/inmobiliaria` `/arquitectos` `/abogados` `/hospedajes` | Landings de conversión |
-| `/admin` | Dashboard leads + métricas de embudo |
-| `/funnel` | Alias (redirige / renderiza la landing) |
-| `/psicologos` | Demo clínica (legacy) |
-| `/api/webhooks/ycloud` | Webhook WhatsApp |
-
-## Multi-dominio
-
-| Tipo | Ejemplo | Resolución |
-|---|---|---|
-| Path | `katem.store/inmobiliaria` | niche route |
-| Query | `?client_id=sec_inmobiliaria_123` | tenant |
-| Subdominio | `inmobiliaria.katem.store` | `tenants.subdomain` → rewrite |
-| Dominio propio | `www.cliente.com` | `tenants.custom_domain` |
-
-## SQL a correr en Supabase
-
-1. `supabase/schema.sql` (base)
-2. `supabase/migration_multidomain.sql`
-3. **`supabase/migration_funnel_events.sql`** ← eventos del embudo
-
-## Env mínimas
-
-Ver `.env.example`. En Vercel setear:
-
-```
-WHATSAPP_HANDSHAKE_MODE=template
-YCLOUD_WELCOME_TEMPLATE_NAME=followuplead
-YCLOUD_WELCOME_TEMPLATE_LANG=es
-YCLOUD_WELCOME_TEMPLATE_CATEGORY=MARKETING
-```
+`/` hub · `/inmobiliaria|/arquitectos|/abogados|/hospedajes` · `/admin` · `/funnel` alias

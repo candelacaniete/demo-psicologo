@@ -8,7 +8,8 @@ export function toE164(phone: string): string {
 }
 
 /**
- * Fallback: user opens WhatsApp first (wa.me) if template outbound fails.
+ * Plan B (default): client opens WhatsApp with a prefilled message.
+ * That first outbound from the user unlocks the 24h session window for the AI agent.
  */
 export function buildWhatsAppDeepLink(
   businessPhone: string,
@@ -28,11 +29,15 @@ export function buildHandshakeMessage(params: {
 }): string {
   const interest = params.initialInterest?.trim();
   const parts = [
-    `Hola, soy ${params.leadName}. Completé el formulario de ${params.empresa} y quiero continuar por acá.`,
+    `Hola, soy ${params.leadName}.`,
+    `Completé el formulario de ${params.empresa} y quiero seguir por acá.`,
   ];
-  if (interest) parts.push(`Consulta: ${interest}`);
   if (params.qualificationSummary) {
-    parts.push(`Datos: ${params.qualificationSummary}`);
+    parts.push(`Mis datos: ${params.qualificationSummary}`);
   }
+  if (interest) {
+    parts.push(`Detalle: ${interest}`);
+  }
+  parts.push("¿Me pueden ayudar?");
   return parts.join("\n");
 }
