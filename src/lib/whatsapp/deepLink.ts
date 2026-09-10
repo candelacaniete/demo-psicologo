@@ -25,8 +25,17 @@ export function buildHandshakeMessage(params: {
   empresa: string;
   niche: string;
   initialInterest?: string;
+  qualificationSummary?: string;
+  status?: string;
 }): string {
   const interest = params.initialInterest?.trim();
-  const base = `Hola, soy ${params.leadName}. Completé el formulario de ${params.empresa} (${params.niche}) y quiero continuar por acá.`;
-  return interest ? `${base} Consulta: ${interest}` : base;
+  const parts = [
+    `Hola, soy ${params.leadName}. Completé el formulario de ${params.empresa} (${params.niche}) y quiero continuar por acá.`,
+  ];
+  if (interest) parts.push(`Consulta: ${interest}`);
+  if (params.qualificationSummary) {
+    parts.push(`Datos: ${params.qualificationSummary}`);
+  }
+  if (params.status) parts.push(`Calificación web: ${params.status}`);
+  return parts.join("\n");
 }

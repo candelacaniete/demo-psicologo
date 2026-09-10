@@ -2,16 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowser } from "@/src/lib/supabase/client";
+import { formatQualificationSummary } from "@/src/lib/qualification/formQualify";
 import type {
   Lead,
   LeadStatus,
   LeadWithConversation,
-  NicheType,
 } from "@/src/types/funnel";
 
 type LeadRow = Lead & {
   current_step: string;
   is_qualified: boolean;
+  collected_data: Record<string, unknown>;
+  score: number | null;
 };
 
 const STATUS_STYLES: Record<LeadStatus, string> = {
@@ -32,11 +34,18 @@ function flattenLead(row: LeadWithConversation): LeadRow {
   const conversation = Array.isArray(row.conversations)
     ? row.conversations[0]
     : row.conversations;
+  const collected = (conversation?.collected_data ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const scoreRaw = collected.qualification_score;
 
   return {
     ...row,
     current_step: conversation?.current_step ?? "—",
     is_qualified: conversation?.is_qualified ?? false,
+    collected_data: collected,
+    score: typeof scoreRaw === "number" ? scoreRaw : null,
   };
 }
 
@@ -45,13 +54,16 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const loadLeads = useCallback(async () => {
     try {
       const supabase = getSupabaseBrowser();
       const { data, error: queryError } = await supabase
         .from("leads")
-        .select("*, conversations(current_step, is_qualified, updated_at)")
+        .select(
+          "*, conversations(current_step, is_qualified, updated_at, collected_data)",
+        )
         .order("created_at", { ascending: false });
 
       if (queryError) {
@@ -75,8 +87,9 @@ export default function AdminDashboard() {
   useEffect(() => {
     void loadLeads();
 
-    let channel: ReturnType<ReturnType<typeof getSupabaseBrowser>["channel"]> | null =
-      null;
+    let channel: ReturnType<
+      ReturnType<typeof getSupabaseBrowser>["channel"]
+    > | null = null;
 
     try {
       const supabase = getSupabaseBrowser();
@@ -84,28 +97,14 @@ export default function AdminDashboard() {
         .channel("admin-dashboard")
         .on(
           "postgres_changes",
-          { event: "INSERT", schema: "public", table: "leads" },
+          { event: "*", schema: "public", table: "leads" },
           () => {
             void loadLeads();
           },
         )
         .on(
           "postgres_changes",
-          { event: "UPDATE", schema: "public", table: "leads" },
-          () => {
-            void loadLeads();
-          },
-        )
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "conversations" },
-          () => {
-            void loadLeads();
-          },
-        )
-        .on(
-          "postgres_changes",
-          { event: "UPDATE", schema: "public", table: "conversations" },
+          { event: "*", schema: "public", table: "conversations" },
           () => {
             void loadLeads();
           },
@@ -132,6 +131,7 @@ export default function AdminDashboard() {
   const metrics = useMemo(() => {
     const total = leads.length;
     const hot = leads.filter((lead) => lead.status === "QUALIFIED_HOT").length;
+    const discarded = leads.filter((lead) => lead.status === "DISCARDED").length;
     const conversion = total === 0 ? 0 : Math.round((hot / total) * 100);
 
     const byNiche = leads.reduce<Record<string, number>>((acc, lead) => {
@@ -139,7 +139,7 @@ export default function AdminDashboard() {
       return acc;
     }, {});
 
-    return { total, hot, conversion, byNiche };
+    return { total, hot, discarded, conversion, byNiche };
   }, [leads]);
 
   return (
@@ -151,7 +151,7 @@ export default function AdminDashboard() {
               Admin
             </p>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-              Funnel Dashboard
+              Leads calificados (formulario)
             </h1>
           </div>
           <div className="flex items-center gap-3 text-sm">
@@ -188,39 +188,28 @@ export default function AdminDashboard() {
             <p className="mt-2 text-3xl font-semibold">{metrics.total}</p>
           </article>
           <article className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
-            <p className="text-sm text-zinc-400">Leads hot</p>
+            <p className="text-sm text-zinc-400">HOT</p>
             <p className="mt-2 text-3xl font-semibold text-emerald-300">
               {metrics.hot}
             </p>
           </article>
           <article className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
-            <p className="text-sm text-zinc-400">Conversion rate</p>
-            <p className="mt-2 text-3xl font-semibold">{metrics.conversion}%</p>
+            <p className="text-sm text-zinc-400">Descartados</p>
+            <p className="mt-2 text-3xl font-semibold text-rose-300">
+              {metrics.discarded}
+            </p>
           </article>
           <article className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
-            <p className="text-sm text-zinc-400">Distribución por nicho</p>
-            <ul className="mt-3 space-y-1 text-sm text-zinc-300">
-              {(Object.keys(metrics.byNiche) as NicheType[]).length === 0 ? (
-                <li>—</li>
-              ) : (
-                (Object.entries(metrics.byNiche) as Array<[NicheType, number]>).map(
-                  ([niche, count]) => (
-                    <li key={niche} className="flex justify-between capitalize">
-                      <span>{niche}</span>
-                      <span className="text-zinc-400">{count}</span>
-                    </li>
-                  ),
-                )
-              )}
-            </ul>
+            <p className="text-sm text-zinc-400">Conversion HOT</p>
+            <p className="mt-2 text-3xl font-semibold">{metrics.conversion}%</p>
           </article>
         </section>
 
         <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
           <div className="border-b border-zinc-800 px-5 py-4">
-            <h2 className="text-lg font-semibold">Leads en vivo</h2>
+            <h2 className="text-lg font-semibold">Inbox de calificación</h2>
             <p className="text-sm text-zinc-400">
-              Escucha INSERT/UPDATE en `leads` y `conversations`.
+              Score y datos vienen del formulario. WhatsApp es la continuidad.
             </p>
           </div>
 
@@ -230,7 +219,7 @@ export default function AdminDashboard() {
             <p className="px-5 py-8 text-sm text-rose-300">{error}</p>
           ) : leads.length === 0 ? (
             <p className="px-5 py-8 text-sm text-zinc-400">
-              Todavía no hay leads. Probá la landing en `/funnel`.
+              Todavía no hay leads. Probá `/funnel`.
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -238,41 +227,76 @@ export default function AdminDashboard() {
                 <thead className="bg-zinc-950/60 text-zinc-400">
                   <tr>
                     <th className="px-5 py-3 font-medium">Nombre</th>
-                    <th className="px-5 py-3 font-medium">Tenant</th>
                     <th className="px-5 py-3 font-medium">Teléfono</th>
                     <th className="px-5 py-3 font-medium">Nicho</th>
+                    <th className="px-5 py-3 font-medium">Score</th>
                     <th className="px-5 py-3 font-medium">Estado</th>
-                    <th className="px-5 py-3 font-medium">Último paso</th>
+                    <th className="px-5 py-3 font-medium">Resumen</th>
                     <th className="px-5 py-3 font-medium">Fecha</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {leads.map((lead) => (
-                    <tr
-                      key={lead.id}
-                      className="border-t border-zinc-800/80 text-zinc-200"
-                    >
-                      <td className="px-5 py-3 font-medium text-white">
-                        {lead.name}
-                      </td>
-                      <td className="px-5 py-3 font-mono text-xs text-zinc-400">
-                        {lead.tenant_id}
-                      </td>
-                      <td className="px-5 py-3">{lead.phone}</td>
-                      <td className="px-5 py-3 capitalize">{lead.niche}</td>
-                      <td className="px-5 py-3">
-                        <span
-                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[lead.status]}`}
-                        >
-                          {lead.status}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3">{lead.current_step}</td>
-                      <td className="px-5 py-3 text-zinc-400">
-                        {formatDate(lead.created_at)}
-                      </td>
-                    </tr>
-                  ))}
+                  {leads.map((lead) => {
+                    const summary = formatQualificationSummary(
+                      lead.collected_data,
+                    );
+                    const open = expandedId === lead.id;
+                    return (
+                      <tr
+                        key={lead.id}
+                        className="border-t border-zinc-800/80 text-zinc-200 align-top"
+                      >
+                        <td className="px-5 py-3 font-medium text-white">
+                          {lead.name}
+                          <div className="mt-1 font-mono text-[11px] text-zinc-500">
+                            {lead.tenant_id}
+                          </div>
+                        </td>
+                        <td className="px-5 py-3">{lead.phone}</td>
+                        <td className="px-5 py-3 capitalize">{lead.niche}</td>
+                        <td className="px-5 py-3 font-semibold">
+                          {lead.score ?? "—"}
+                        </td>
+                        <td className="px-5 py-3">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[lead.status]}`}
+                          >
+                            {lead.status}
+                          </span>
+                        </td>
+                        <td className="max-w-xs px-5 py-3 text-zinc-400">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedId(open ? null : lead.id)
+                            }
+                            className="text-left text-xs leading-relaxed hover:text-zinc-200"
+                          >
+                            {open
+                              ? summary || "Sin datos"
+                              : (summary || "Sin datos").slice(0, 80) +
+                                ((summary?.length ?? 0) > 80 ? "…" : "")}
+                          </button>
+                          {open &&
+                          Array.isArray(
+                            lead.collected_data.qualification_reasons,
+                          ) ? (
+                            <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] text-zinc-500">
+                              {(
+                                lead.collected_data
+                                  .qualification_reasons as string[]
+                              ).map((reason) => (
+                                <li key={reason}>{reason}</li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </td>
+                        <td className="px-5 py-3 text-zinc-400">
+                          {formatDate(lead.created_at)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

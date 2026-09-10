@@ -10,6 +10,10 @@ import {
   buildHandshakeMessage,
   buildWhatsAppDeepLink,
 } from "@/src/lib/whatsapp/deepLink";
+import {
+  formatQualificationSummary,
+  qualifyFromForm,
+} from "@/src/lib/qualification/formQualify";
 import type { CaptureLeadPayload, Lead } from "@/src/types/funnel";
 
 function normalizePhone(phone: string, countryCode = "54"): string {
@@ -40,6 +44,7 @@ export async function POST(request: Request) {
     const niche = body.niche;
     const initialInterest = body.initialInterest?.trim() ?? "";
     const countryCode = body.countryCode?.trim() || "54";
+    const qualificationAnswers = body.qualificationAnswers ?? {};
     const clientId =
       body.clientId?.trim() ||
       body.tenantId?.trim() ||
@@ -73,6 +78,7 @@ export async function POST(request: Request) {
       );
     }
 
+    const qualification = qualifyFromForm(niche, qualificationAnswers);
     const phone = normalizePhone(phoneRaw, countryCode);
     const supabase = getSupabaseAdmin();
 
@@ -84,8 +90,8 @@ export async function POST(request: Request) {
           name,
           phone,
           niche,
-          status: "NEW",
-          source: "landing",
+          status: qualification.status,
+          source: "landing_form",
           initial_interest: initialInterest || null,
         },
         { onConflict: "tenant_id,phone" },
@@ -104,18 +110,23 @@ export async function POST(request: Request) {
 
     await supabase.from("conversations").delete().eq("lead_id", lead.id);
 
+    const collectedData = {
+      nombre: name,
+      initial_interest: initialInterest,
+      tenant_id: tenant.id,
+      handshake_mode: "user_initiated",
+      qualification_score: qualification.score,
+      qualification_reasons: qualification.reasons,
+      ...qualification.collectedData,
+    };
+
     const { data: conversation, error: conversationError } = await supabase
       .from("conversations")
       .insert({
         lead_id: lead.id,
-        current_step: "awaiting_user_whatsapp",
-        collected_data: {
-          nombre: name,
-          initial_interest: initialInterest,
-          tenant_id: tenant.id,
-          handshake_mode: "user_initiated",
-        },
-        is_qualified: false,
+        current_step: "form_qualified",
+        collected_data: collectedData,
+        is_qualified: qualification.isQualified,
       })
       .select("*")
       .single();
@@ -130,16 +141,14 @@ export async function POST(request: Request) {
       );
     }
 
-    await supabase
-      .from("leads")
-      .update({ status: "IN_QUALIFICATION" })
-      .eq("id", lead.id);
-
+    const summary = formatQualificationSummary(collectedData);
     const handshakeMessage = buildHandshakeMessage({
       leadName: name,
       empresa: tenant.name,
       niche,
       initialInterest,
+      qualificationSummary: summary,
+      status: qualification.status,
     });
 
     const whatsappDeepLink = buildWhatsAppDeepLink(
@@ -150,16 +159,18 @@ export async function POST(request: Request) {
     await supabase.from("messages").insert({
       lead_id: lead.id,
       sender: "bot",
-      content:
-        "Lead capturado. Esperando que abra WhatsApp (handshake user-initiated).",
+      content: `Lead calificado por formulario. Score ${qualification.score} → ${qualification.status}. Continuar por WhatsApp.`,
       raw_payload: {
-        type: "handshake_pending",
+        type: "form_qualification",
         tenant_id: tenant.id,
+        score: qualification.score,
+        status: qualification.status,
+        reasons: qualification.reasons,
+        collectedData: qualification.collectedData,
         whatsappDeepLink,
       },
     });
 
-    // Optional Plan A: try template only if explicitly enabled and approved.
     const handshakeMode =
       process.env.WHATSAPP_HANDSHAKE_MODE || "user_initiated";
     let templateSent = false;
@@ -195,7 +206,13 @@ export async function POST(request: Request) {
         handshakeMessage,
         templateSent,
         templateError,
-        lead: { ...lead, status: "IN_QUALIFICATION" },
+        qualification: {
+          score: qualification.score,
+          status: qualification.status,
+          isQualified: qualification.isQualified,
+          reasons: qualification.reasons,
+        },
+        lead: { ...lead, status: qualification.status },
         conversation,
         tenantId: tenant.id,
         tenantName: tenant.name,

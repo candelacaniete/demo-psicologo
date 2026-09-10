@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { NicheConfig, NicheType } from "@/src/types/funnel";
+import type { LeadStatus, NicheConfig, NicheType } from "@/src/types/funnel";
 import { NICHE_LIST } from "@/src/config/niches";
+import { NICHE_QUALIFICATION } from "@/src/lib/qualification/formQualify";
 
 const COUNTRY_CODES = [
   { code: "54", label: "AR +54" },
@@ -27,14 +28,27 @@ export default function FunnelLanding({
   tenantName,
 }: FunnelLandingProps) {
   const router = useRouter();
+  const qualifyFields = NICHE_QUALIFICATION[niche].fields;
+
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [countryCode, setCountryCode] = useState("54");
   const [initialInterest, setInitialInterest] = useState("");
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [whatsappDeepLink, setWhatsappDeepLink] = useState<string | null>(null);
+  const [resultStatus, setResultStatus] = useState<LeadStatus | null>(null);
+  const [resultScore, setResultScore] = useState<number | null>(null);
+
+  useEffect(() => {
+    setAnswers({});
+    setWhatsappDeepLink(null);
+    setFeedback(null);
+    setResultStatus(null);
+    setResultScore(null);
+  }, [niche]);
 
   const theme = useMemo(
     () => ({
@@ -46,6 +60,10 @@ export default function FunnelLanding({
 
   function onSelectNiche(next: NicheType) {
     router.push(`/funnel?nicho=${next}`);
+  }
+
+  function setAnswer(fieldId: string, value: string) {
+    setAnswers((prev) => ({ ...prev, [fieldId]: value }));
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -66,6 +84,7 @@ export default function FunnelLanding({
           initialInterest,
           countryCode,
           clientId,
+          qualificationAnswers: answers,
         }),
       });
 
@@ -73,20 +92,23 @@ export default function FunnelLanding({
         error?: string;
         ok?: boolean;
         whatsappDeepLink?: string;
-        tenantName?: string;
+        qualification?: { score: number; status: LeadStatus };
       };
 
       if (!response.ok) {
         throw new Error(payload.error ?? "No se pudo guardar el lead");
       }
 
+      setResultStatus(payload.qualification?.status ?? null);
+      setResultScore(payload.qualification?.score ?? null);
       setFeedback(
-        "Datos guardados. Para activar el asistente, abrí WhatsApp y enviá el mensaje precargado.",
+        "Listo: ya estás en el dashboard del equipo. Continuá por WhatsApp para hablar con un asesor.",
       );
       setWhatsappDeepLink(payload.whatsappDeepLink ?? null);
       setName("");
       setPhone("");
       setInitialInterest("");
+      setAnswers({});
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -136,7 +158,7 @@ export default function FunnelLanding({
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-6xl gap-10 px-5 py-10 lg:grid-cols-2 lg:items-center lg:py-16">
+      <main className="mx-auto grid max-w-6xl gap-10 px-5 py-10 lg:grid-cols-2 lg:items-start lg:py-16">
         <section>
           <span
             className={`inline-flex rounded-full px-3 py-1 text-xs font-medium capitalize ${theme.chip}`}
@@ -166,12 +188,20 @@ export default function FunnelLanding({
           {whatsappDeepLink ? (
             <div className="space-y-4">
               <h2 className="text-xl font-semibold tracking-tight">
-                Un paso más: abrí WhatsApp
+                Datos recibidos
               </h2>
+              {resultStatus ? (
+                <p className="text-sm text-zinc-600">
+                  Calificación:{" "}
+                  <span className="font-semibold text-zinc-900">
+                    {resultStatus}
+                  </span>
+                  {resultScore !== null ? ` · score ${resultScore}` : null}
+                </p>
+              ) : null}
               <p className="text-sm leading-relaxed text-zinc-600">
-                Para poder responderte automáticamente (sin plantillas de Meta),
-                tenés que iniciar la conversación. Tocá el botón, enviá el
-                mensaje precargado y el asistente continúa solo.
+                El equipo ya ve tu consulta en el panel. Si querés seguir ahora,
+                abrí WhatsApp y enviá el mensaje precargado.
               </p>
               <a
                 href={whatsappDeepLink}
@@ -188,7 +218,11 @@ export default function FunnelLanding({
               ) : null}
               <button
                 type="button"
-                onClick={() => setWhatsappDeepLink(null)}
+                onClick={() => {
+                  setWhatsappDeepLink(null);
+                  setResultStatus(null);
+                  setResultScore(null);
+                }}
                 className="text-sm text-zinc-500 underline-offset-2 hover:underline"
               >
                 Cargar otro lead
@@ -197,11 +231,11 @@ export default function FunnelLanding({
           ) : (
             <>
               <h2 className="text-xl font-semibold tracking-tight">
-                Dejá tus datos
+                Contanos tu consulta
               </h2>
               <p className="mt-2 text-sm text-zinc-500">
-                Después te pedimos abrir WhatsApp un segundo para activar el
-                asistente.
+                Con estas respuestas te calificamos al momento. Después podés
+                seguir por WhatsApp.
               </p>
 
               <form className="mt-6 space-y-4" onSubmit={onSubmit}>
@@ -242,13 +276,51 @@ export default function FunnelLanding({
                   </div>
                 </label>
 
+                {qualifyFields.map((field) => (
+                  <label
+                    key={field.id}
+                    className="block text-sm font-medium text-zinc-700"
+                  >
+                    {field.label}
+                    {field.type === "select" ? (
+                      <select
+                        required={field.required}
+                        value={answers[field.id] ?? ""}
+                        onChange={(event) =>
+                          setAnswer(field.id, event.target.value)
+                        }
+                        className="mt-1.5 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-zinc-400 focus:bg-white"
+                      >
+                        <option value="" disabled>
+                          Elegí una opción
+                        </option>
+                        {field.options?.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        required={field.required}
+                        value={answers[field.id] ?? ""}
+                        onChange={(event) =>
+                          setAnswer(field.id, event.target.value)
+                        }
+                        className="mt-1.5 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-zinc-400 focus:bg-white"
+                        placeholder={field.placeholder}
+                      />
+                    )}
+                  </label>
+                ))}
+
                 <label className="block text-sm font-medium text-zinc-700">
-                  {config.fields.interestLabel}
+                  {config.fields.interestLabel}{" "}
+                  <span className="font-normal text-zinc-400">(opcional)</span>
                   <textarea
-                    required
                     value={initialInterest}
                     onChange={(event) => setInitialInterest(event.target.value)}
-                    className="mt-1.5 min-h-[96px] w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-zinc-400 focus:bg-white"
+                    className="mt-1.5 min-h-[80px] w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-zinc-400 focus:bg-white"
                     placeholder={config.fields.interestPlaceholder}
                   />
                 </label>
@@ -258,7 +330,7 @@ export default function FunnelLanding({
                   disabled={isSubmitting}
                   className={`w-full rounded-xl px-4 py-3 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${theme.button}`}
                 >
-                  {isSubmitting ? "Enviando..." : config.fields.ctaLabel}
+                  {isSubmitting ? "Calificando..." : config.fields.ctaLabel}
                 </button>
               </form>
 
