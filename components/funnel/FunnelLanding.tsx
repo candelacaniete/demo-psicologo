@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { LeadStatus, NicheConfig, NicheType } from "@/src/types/funnel";
+import type { NicheConfig, NicheType } from "@/src/types/funnel";
 import { NICHE_LIST } from "@/src/config/niches";
 import { NICHE_QUALIFICATION } from "@/src/lib/qualification/formQualify";
 
@@ -41,8 +41,6 @@ export default function FunnelLanding({
   const [whatsappDeepLink, setWhatsappDeepLink] = useState<string | null>(null);
   const [templateSent, setTemplateSent] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [resultStatus, setResultStatus] = useState<LeadStatus | null>(null);
-  const [resultScore, setResultScore] = useState<number | null>(null);
 
   useEffect(() => {
     setAnswers({});
@@ -50,8 +48,6 @@ export default function FunnelLanding({
     setTemplateSent(false);
     setSubmitted(false);
     setFeedback(null);
-    setResultStatus(null);
-    setResultScore(null);
   }, [niche]);
 
   const theme = useMemo(
@@ -98,21 +94,18 @@ export default function FunnelLanding({
         whatsappDeepLink?: string;
         templateSent?: boolean;
         handshakeMode?: string;
-        qualification?: { score: number; status: LeadStatus };
       };
 
       if (!response.ok) {
-        throw new Error(payload.error ?? "No se pudo guardar el lead");
+        throw new Error(payload.error ?? "No se pudo enviar la consulta");
       }
 
-      setResultStatus(payload.qualification?.status ?? null);
-      setResultScore(payload.qualification?.score ?? null);
       setTemplateSent(Boolean(payload.templateSent));
       setSubmitted(true);
       setFeedback(
         payload.templateSent
-          ? "Listo: te enviamos el primer mensaje por WhatsApp con la plantilla aprobada."
-          : "Listo: ya estás en el dashboard. Continuá por WhatsApp para hablar con un asesor.",
+          ? "Revisá WhatsApp: ya te enviamos el primer mensaje."
+          : "Tu consulta quedó registrada. Continuá por WhatsApp para hablar con el equipo.",
       );
       setWhatsappDeepLink(payload.whatsappDeepLink ?? null);
       setName("");
@@ -200,21 +193,12 @@ export default function FunnelLanding({
               <h2 className="text-xl font-semibold tracking-tight">
                 {templateSent
                   ? "Te escribimos por WhatsApp"
-                  : "Datos recibidos"}
+                  : "Recibimos tu consulta"}
               </h2>
-              {resultStatus ? (
-                <p className="text-sm text-zinc-600">
-                  Calificación:{" "}
-                  <span className="font-semibold text-zinc-900">
-                    {resultStatus}
-                  </span>
-                  {resultScore !== null ? ` · score ${resultScore}` : null}
-                </p>
-              ) : null}
               <p className="text-sm leading-relaxed text-zinc-600">
                 {templateSent
-                  ? "Revisá tus mensajes: ya salió el primer contacto con la plantilla aprobada. Cuando respondás, el agente puede seguir en texto libre."
-                  : "El equipo ya ve tu consulta en el panel. Si querés seguir ahora, abrí WhatsApp y enviá el mensaje precargado."}
+                  ? "Revisá tus mensajes: ya salió el primer contacto. Cuando respondas, seguimos por ahí."
+                  : "Si querés seguir ahora, abrí WhatsApp y enviá el mensaje precargado."}
               </p>
               {whatsappDeepLink ? (
                 <a
@@ -237,12 +221,10 @@ export default function FunnelLanding({
                   setSubmitted(false);
                   setTemplateSent(false);
                   setWhatsappDeepLink(null);
-                  setResultStatus(null);
-                  setResultScore(null);
                 }}
                 className="text-sm text-zinc-500 underline-offset-2 hover:underline"
               >
-                Cargar otro lead
+                Enviar otra consulta
               </button>
             </div>
           ) : (

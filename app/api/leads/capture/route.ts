@@ -110,11 +110,12 @@ export async function POST(request: Request) {
 
     await supabase.from("conversations").delete().eq("lead_id", lead.id);
 
-    // Plan A default: business-initiated template (works for Marketing or Utility).
-    // Plan B fallback: user_initiated wa.me if template fails / is skipped.
-    const configuredMode =
-      process.env.WHATSAPP_HANDSHAKE_MODE || "template";
-    const preferTemplate = configuredMode === "template";
+    // Plan A default: try template unless explicitly opted out.
+    // Plan B fallback: wa.me if template fails / is skipped.
+    const configuredMode = (
+      process.env.WHATSAPP_HANDSHAKE_MODE || "template"
+    ).toLowerCase();
+    const preferTemplate = configuredMode !== "user_initiated";
 
     const collectedData = {
       nombre: name,
@@ -154,7 +155,6 @@ export async function POST(request: Request) {
       niche,
       initialInterest,
       qualificationSummary: summary,
-      status: qualification.status,
     });
 
     const whatsappDeepLink = buildWhatsAppDeepLink(
@@ -172,11 +172,16 @@ export async function POST(request: Request) {
     const templateCategory =
       process.env.YCLOUD_WELCOME_TEMPLATE_CATEGORY || "MARKETING";
 
-    // Marketing templates consume daily/quality limits — skip cold leads.
+    // Marketing templates consume daily/quality limits — skip cold only.
     if (preferTemplate && qualification.status === "DISCARDED") {
       templateSkipped = true;
     } else if (preferTemplate) {
       try {
+        if (!tenant.ycloud_api_key || !tenant.whatsapp_from) {
+          throw new Error(
+            "Tenant missing YCloud API key or WhatsApp From number",
+          );
+        }
         const adapter = new YCloudAdapter(
           tenant.ycloud_api_key,
           tenant.whatsapp_from,
@@ -189,25 +194,32 @@ export async function POST(request: Request) {
       } catch (error) {
         templateError =
           error instanceof Error ? error.message : "Template send failed";
-        console.error("Template welcome failed; falling back to wa.me", error);
+        console.error("Template welcome failed; falling back to wa.me", {
+          templateError,
+          templateName,
+          templateLanguage,
+          phone,
+          tenantId: tenant.id,
+          from: tenant.whatsapp_from,
+        });
       }
     }
 
     const effectiveHandshake = templateSent ? "template" : "user_initiated";
 
-    if (effectiveHandshake !== collectedData.handshake_mode) {
-      await supabase
-        .from("conversations")
-        .update({
-          collected_data: {
-            ...collectedData,
-            handshake_mode: effectiveHandshake,
-            template_error: templateError,
-            template_skipped: templateSkipped,
-          },
-        })
-        .eq("id", conversation.id);
-    }
+    await supabase
+      .from("conversations")
+      .update({
+        collected_data: {
+          ...collectedData,
+          handshake_mode: effectiveHandshake,
+          template_sent: templateSent,
+          template_error: templateError,
+          template_skipped: templateSkipped,
+          template_name: templateName,
+        },
+      })
+      .eq("id", conversation.id);
 
     await supabase.from("messages").insert({
       lead_id: lead.id,

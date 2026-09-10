@@ -27,7 +27,6 @@ type ConversionLandingProps = {
 export default function ConversionLanding({
   niche,
   clientId,
-  tenantName,
 }: ConversionLandingProps) {
   const content = LANDING_CONTENT[niche];
   const nicheConfig = NICHE_CONFIGS[niche];
@@ -229,7 +228,7 @@ export default function ConversionLanding({
             {submitted ? (
               <div className="space-y-4">
                 <p className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${theme.accentSoft}`}>
-                  {resultStatus ?? "ENVIADO"}
+                  {templateSent ? "WhatsApp enviado" : "Consulta recibida"}
                 </p>
                 <h2 className="font-fraunces text-2xl tracking-tight">
                   {templateSent
@@ -262,9 +261,13 @@ export default function ConversionLanding({
                 ) : null}
                 {templateSent ? (
                   <p className={`text-center text-xs ${theme.muted}`}>
-                    Si no ves el mensaje, abrí WhatsApp o revisá spam/filtros.
+                    Si no ves el mensaje, abrí WhatsApp o revisá la carpeta de filtros.
                   </p>
-                ) : null}
+                ) : (
+                  <p className={`text-center text-xs ${theme.muted}`}>
+                    Tocá el botón para abrir el chat con el mensaje listo.
+                  </p>
+                )}
                 <button
                   type="button"
                   className={`text-sm ${theme.muted} underline-offset-2 hover:underline`}
@@ -423,11 +426,6 @@ export default function ConversionLanding({
                 {error ? (
                   <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">
                     {error}
-                  </p>
-                ) : null}
-                {tenantName ? (
-                  <p className={`mt-3 text-center text-[11px] ${theme.muted}`}>
-                    Demo tenant: {tenantName}
                   </p>
                 ) : null}
               </>

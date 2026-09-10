@@ -298,7 +298,7 @@ export const LANDING_CONTENT: Record<NicheType, LandingContent> = {
       },
       {
         q: "¿Qué pasa si no cubren mi área?",
-        a: "Te lo informamos en la calificación. Preferimos honestidad a forzar un lead.",
+        a: "Te lo informamos al instante. Preferimos honestidad a forzar una consulta que no podemos atender.",
       },
       {
         q: "¿Puedo enviar documentos?",

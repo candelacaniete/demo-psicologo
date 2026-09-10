@@ -8,8 +8,7 @@ export function toE164(phone: string): string {
 }
 
 /**
- * Plan B: user-initiated WhatsApp handshake.
- * Opens wa.me so the lead writes first and unlocks the 24h session window.
+ * Fallback: user opens WhatsApp first (wa.me) if template outbound fails.
  */
 export function buildWhatsAppDeepLink(
   businessPhone: string,
@@ -26,16 +25,14 @@ export function buildHandshakeMessage(params: {
   niche: string;
   initialInterest?: string;
   qualificationSummary?: string;
-  status?: string;
 }): string {
   const interest = params.initialInterest?.trim();
   const parts = [
-    `Hola, soy ${params.leadName}. Completé el formulario de ${params.empresa} (${params.niche}) y quiero continuar por acá.`,
+    `Hola, soy ${params.leadName}. Completé el formulario de ${params.empresa} y quiero continuar por acá.`,
   ];
   if (interest) parts.push(`Consulta: ${interest}`);
   if (params.qualificationSummary) {
     parts.push(`Datos: ${params.qualificationSummary}`);
   }
-  if (params.status) parts.push(`Calificación web: ${params.status}`);
   return parts.join("\n");
 }
