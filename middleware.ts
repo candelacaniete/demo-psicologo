@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DEMO_TENANTS } from "@/src/config/tenants";
+import type { NicheType } from "@/src/types/funnel";
 
 const ROOT_DOMAIN = (process.env.NEXT_PUBLIC_ROOT_DOMAIN || "katem.store")
   .toLowerCase()
   .replace(/^www\./, "");
+
+const NICHE_PATH: Record<NicheType, string> = {
+  inmobiliaria: "/inmobiliaria",
+  arquitectos: "/arquitectos",
+  abogados: "/abogados",
+  hospedajes: "/hospedajes",
+};
 
 function resolveTenantIdFromHost(hostname: string): string | null {
   const host = hostname.split(":")[0]?.toLowerCase() ?? "";
@@ -49,10 +57,21 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Custom/subdomain → serve tenant funnel without exposing query params.
-  if (pathname === "/" || pathname === "/funnel") {
+  const tenant = DEMO_TENANTS[tenantId];
+  if (!tenant) {
+    return NextResponse.next();
+  }
+
+  const nichePath = NICHE_PATH[tenant.niche];
+
+  // Custom/subdomain → serve niche conversion landing.
+  if (
+    pathname === "/" ||
+    pathname === "/funnel" ||
+    pathname === nichePath
+  ) {
     const url = request.nextUrl.clone();
-    url.pathname = "/funnel";
+    url.pathname = nichePath;
     url.searchParams.set("client_id", tenantId);
     return NextResponse.rewrite(url);
   }

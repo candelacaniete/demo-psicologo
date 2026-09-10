@@ -1,10 +1,19 @@
-import FunnelLanding from "@/components/funnel/FunnelLanding";
-import { NICHE_CONFIGS, resolveNiche } from "@/src/config/niches";
+import ConversionLanding from "@/components/landing/ConversionLanding";
+import { resolveNiche } from "@/src/config/niches";
 import {
   defaultClientIdForNiche,
   getTenantById,
   resolveClientId,
 } from "@/src/config/tenants";
+import type { NicheType } from "@/src/types/funnel";
+import { redirect } from "next/navigation";
+
+const NICHE_PATH: Record<NicheType, string> = {
+  inmobiliaria: "/inmobiliaria",
+  arquitectos: "/arquitectos",
+  abogados: "/abogados",
+  hospedajes: "/hospedajes",
+};
 
 type FunnelPageProps = {
   searchParams: {
@@ -13,6 +22,7 @@ type FunnelPageProps = {
   };
 };
 
+/** Compatibility alias → prefer /inmobiliaria|/arquitectos|/abogados|/hospedajes */
 export default async function FunnelPage({ searchParams }: FunnelPageProps) {
   const nicheFromQuery = resolveNiche(searchParams.nicho);
   const clientIdFromQuery = resolveClientId(searchParams.client_id);
@@ -24,29 +34,14 @@ export default async function FunnelPage({ searchParams }: FunnelPageProps) {
   const niche = tenant?.niche ?? nicheFromQuery;
   const clientId = tenant?.id ?? defaultClientIdForNiche(niche);
   const resolvedTenant = tenant ?? (await getTenantById(clientId));
-  const config = {
-    ...NICHE_CONFIGS[niche],
-    ...(resolvedTenant?.hero_image
-      ? { heroImage: resolvedTenant.hero_image }
-      : {}),
-    ...(resolvedTenant?.primary_color
-      ? {
-          primaryColor: resolvedTenant.primary_color,
-          primaryColorHover: resolvedTenant.primary_color,
-        }
-      : {}),
-    ...(resolvedTenant?.name
-      ? {
-          title: `${NICHE_CONFIGS[niche].title}`,
-          subtitle: `${NICHE_CONFIGS[niche].subtitle} · ${resolvedTenant.name}`,
-        }
-      : {}),
-  };
+
+  if (!clientIdFromQuery && !searchParams.nicho) {
+    redirect(NICHE_PATH[niche]);
+  }
 
   return (
-    <FunnelLanding
+    <ConversionLanding
       niche={niche}
-      config={config}
       clientId={clientId}
       tenantName={resolvedTenant?.name}
     />

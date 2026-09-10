@@ -49,12 +49,16 @@ function flattenLead(row: LeadWithConversation): LeadRow {
   };
 }
 
+type FunnelCounts = Record<string, number>;
+
 export default function AdminDashboard() {
   const [leads, setLeads] = useState<LeadRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [funnelCounts, setFunnelCounts] = useState<FunnelCounts>({});
+  const [funnelWarning, setFunnelWarning] = useState<string | null>(null);
 
   const loadLeads = useCallback(async () => {
     try {
@@ -84,8 +88,28 @@ export default function AdminDashboard() {
     }
   }, []);
 
+  const loadFunnelEvents = useCallback(async () => {
+    try {
+      const response = await fetch("/api/funnel/events");
+      const payload = (await response.json()) as {
+        counts?: FunnelCounts;
+        warning?: string;
+        error?: string;
+      };
+      setFunnelCounts(payload.counts ?? {});
+      setFunnelWarning(payload.warning ?? payload.error ?? null);
+    } catch {
+      setFunnelWarning("No se pudieron cargar eventos del embudo");
+    }
+  }, []);
+
   useEffect(() => {
     void loadLeads();
+    void loadFunnelEvents();
+
+    const interval = window.setInterval(() => {
+      void loadFunnelEvents();
+    }, 15000);
 
     let channel: ReturnType<
       ReturnType<typeof getSupabaseBrowser>["channel"]
@@ -121,12 +145,13 @@ export default function AdminDashboard() {
     }
 
     return () => {
+      window.clearInterval(interval);
       if (channel) {
         const supabase = getSupabaseBrowser();
         void supabase.removeChannel(channel);
       }
     };
-  }, [loadLeads]);
+  }, [loadLeads, loadFunnelEvents]);
 
   const metrics = useMemo(() => {
     const total = leads.length;
@@ -142,19 +167,27 @@ export default function AdminDashboard() {
     return { total, hot, discarded, conversion, byNiche };
   }, [leads]);
 
+  const funnelMetrics = [
+    { key: "landing_view", label: "Views" },
+    { key: "form_step1_complete", label: "Paso 1" },
+    { key: "form_submitted", label: "Enviados" },
+    { key: "whatsapp_click", label: "WA clicks" },
+    { key: "qualified_hot", label: "HOT events" },
+  ];
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <header className="border-b border-zinc-800">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5">
           <div>
             <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
               Admin
             </p>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-              Leads calificados (formulario)
+              Leads + embudo
             </h1>
           </div>
-          <div className="flex items-center gap-3 text-sm">
+          <div className="flex flex-wrap items-center gap-3 text-sm">
             <span
               className={[
                 "inline-flex items-center gap-2 rounded-full px-3 py-1",
@@ -172,10 +205,16 @@ export default function AdminDashboard() {
               {live ? "Realtime on" : "Realtime off"}
             </span>
             <a
-              href="/funnel"
+              href="/"
               className="rounded-full border border-zinc-700 px-3 py-1 text-zinc-300 transition hover:border-zinc-500 hover:text-white"
             >
-              Ver landing
+              Hub
+            </a>
+            <a
+              href="/inmobiliaria"
+              className="rounded-full border border-zinc-700 px-3 py-1 text-zinc-300 transition hover:border-zinc-500 hover:text-white"
+            >
+              Landings
             </a>
           </div>
         </div>
@@ -205,6 +244,36 @@ export default function AdminDashboard() {
           </article>
         </section>
 
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Embudo (eventos)</h2>
+              <p className="text-sm text-zinc-400">
+                Views → paso 1 → envío → WhatsApp. Requiere{" "}
+                <code className="text-zinc-300">migration_funnel_events.sql</code>
+              </p>
+            </div>
+            {funnelWarning ? (
+              <p className="max-w-md text-xs text-amber-300/90">{funnelWarning}</p>
+            ) : null}
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {funnelMetrics.map((item) => (
+              <article
+                key={item.key}
+                className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4"
+              >
+                <p className="text-xs uppercase tracking-wide text-zinc-500">
+                  {item.label}
+                </p>
+                <p className="mt-2 text-2xl font-semibold">
+                  {funnelCounts[item.key] ?? 0}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
           <div className="border-b border-zinc-800 px-5 py-4">
             <h2 className="text-lg font-semibold">Inbox de calificación</h2>
@@ -219,7 +288,7 @@ export default function AdminDashboard() {
             <p className="px-5 py-8 text-sm text-rose-300">{error}</p>
           ) : leads.length === 0 ? (
             <p className="px-5 py-8 text-sm text-zinc-400">
-              Todavía no hay leads. Probá `/funnel`.
+              Todavía no hay leads. Probá `/inmobiliaria`.
             </p>
           ) : (
             <div className="overflow-x-auto">
