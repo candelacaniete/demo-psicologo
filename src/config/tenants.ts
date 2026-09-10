@@ -18,6 +18,8 @@ export const DEMO_TENANTS: Record<string, TenantRecord> = {
     primary_color: "bg-emerald-700",
     hero_image:
       "https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1600&q=80",
+    subdomain: "inmobiliaria",
+    custom_domain: null,
   },
   sec_arquitectos_123: {
     id: "sec_arquitectos_123",
@@ -30,6 +32,8 @@ export const DEMO_TENANTS: Record<string, TenantRecord> = {
     primary_color: "bg-stone-800",
     hero_image:
       "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1600&q=80",
+    subdomain: "arquitectos",
+    custom_domain: null,
   },
   sec_abogados_123: {
     id: "sec_abogados_123",
@@ -42,6 +46,8 @@ export const DEMO_TENANTS: Record<string, TenantRecord> = {
     primary_color: "bg-slate-800",
     hero_image:
       "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=1600&q=80",
+    subdomain: "abogados",
+    custom_domain: null,
   },
   sec_hospedajes_123: {
     id: "sec_hospedajes_123",
@@ -54,6 +60,8 @@ export const DEMO_TENANTS: Record<string, TenantRecord> = {
     primary_color: "bg-teal-700",
     hero_image:
       "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1600&q=80",
+    subdomain: "hospedajes",
+    custom_domain: null,
   },
 };
 
@@ -146,4 +154,57 @@ export function defaultClientIdForNiche(niche: NicheType): string {
     (tenant) => tenant.niche === niche,
   );
   return match?.id ?? "sec_inmobiliaria_123";
+}
+
+export async function getTenantByHost(
+  host: string,
+): Promise<TenantRecord | null> {
+  const hostname = host.split(":")[0]?.toLowerCase() ?? "";
+  const rootDomain = (process.env.NEXT_PUBLIC_ROOT_DOMAIN || "katem.store")
+    .toLowerCase()
+    .replace(/^www\./, "");
+
+  try {
+    const supabase = getSupabaseAdmin();
+    const { data: byCustom } = await supabase
+      .from("tenants")
+      .select("*")
+      .eq("custom_domain", hostname)
+      .maybeSingle();
+
+    if (byCustom) {
+      return getTenantById((byCustom as TenantRecord).id);
+    }
+
+    if (hostname.endsWith(`.${rootDomain}`)) {
+      const subdomain = hostname.replace(`.${rootDomain}`, "");
+      if (subdomain && !["www", "app", "api", "admin"].includes(subdomain)) {
+        const { data: bySub } = await supabase
+          .from("tenants")
+          .select("*")
+          .eq("subdomain", subdomain)
+          .maybeSingle();
+        if (bySub) {
+          return getTenantById((bySub as TenantRecord).id);
+        }
+      }
+    }
+  } catch {
+    // Fall through to seed map.
+  }
+
+  const seedByCustom = Object.values(DEMO_TENANTS).find(
+    (tenant) => tenant.custom_domain?.toLowerCase() === hostname,
+  );
+  if (seedByCustom) return getTenantById(seedByCustom.id);
+
+  if (hostname.endsWith(`.${rootDomain}`)) {
+    const subdomain = hostname.replace(`.${rootDomain}`, "");
+    const seedBySub = Object.values(DEMO_TENANTS).find(
+      (tenant) => tenant.subdomain === subdomain,
+    );
+    if (seedBySub) return getTenantById(seedBySub.id);
+  }
+
+  return null;
 }

@@ -6,39 +6,30 @@ import {
   getTenantById,
 } from "@/src/config/tenants";
 import { YCloudAdapter } from "@/src/lib/adapters/ycloud.adapter";
+import {
+  buildHandshakeMessage,
+  buildWhatsAppDeepLink,
+} from "@/src/lib/whatsapp/deepLink";
 import type { CaptureLeadPayload, Lead } from "@/src/types/funnel";
 
 function normalizePhone(phone: string, countryCode = "54"): string {
   let digits = phone.replace(/[^\d]/g, "");
 
-  // Argentina mobiles need +54 9 ...
   if (countryCode === "54") {
-    if (digits.startsWith("549")) {
-      return digits;
-    }
+    if (digits.startsWith("549")) return digits;
     if (digits.startsWith("54") && !digits.startsWith("549")) {
       return `549${digits.slice(2)}`;
     }
-    if (digits.startsWith("9")) {
-      return `54${digits}`;
-    }
-    if (digits.startsWith("0")) {
-      digits = digits.replace(/^0+/, "");
-    }
+    if (digits.startsWith("9")) return `54${digits}`;
+    if (digits.startsWith("0")) digits = digits.replace(/^0+/, "");
     return `549${digits}`;
   }
 
-  if (digits.startsWith(countryCode)) {
-    return digits;
-  }
+  if (digits.startsWith(countryCode)) return digits;
   if (digits.startsWith("0")) {
     return `${countryCode}${digits.replace(/^0+/, "")}`;
   }
   return `${countryCode}${digits}`;
-}
-
-function welcomeCopy(name: string, niche: string): string {
-  return `Hola ${name} 👋 Gracias por escribirnos (${niche}). Soy el asistente virtual: contame un poco más de lo que necesitás y te ayudo a orientar la consulta.`;
 }
 
 export async function POST(request: Request) {
@@ -117,11 +108,12 @@ export async function POST(request: Request) {
       .from("conversations")
       .insert({
         lead_id: lead.id,
-        current_step: "ai_agent",
+        current_step: "awaiting_user_whatsapp",
         collected_data: {
           nombre: name,
           initial_interest: initialInterest,
           tenant_id: tenant.id,
+          handshake_mode: "user_initiated",
         },
         is_qualified: false,
       })
@@ -143,81 +135,70 @@ export async function POST(request: Request) {
       .update({ status: "IN_QUALIFICATION" })
       .eq("id", lead.id);
 
-    const welcomeText = welcomeCopy(name, niche);
+    const handshakeMessage = buildHandshakeMessage({
+      leadName: name,
+      empresa: tenant.name,
+      niche,
+      initialInterest,
+    });
 
-    try {
-      if (!tenant.ycloud_api_key || !tenant.whatsapp_from) {
-        throw new Error(
-          "Tenant missing YCloud credentials. Set YCLOUD_API_KEY and YCLOUD_WHATSAPP_FROM in Vercel, or UPDATE tenants in Supabase.",
+    const whatsappDeepLink = buildWhatsAppDeepLink(
+      tenant.whatsapp_from || process.env.YCLOUD_WHATSAPP_FROM || "",
+      handshakeMessage,
+    );
+
+    await supabase.from("messages").insert({
+      lead_id: lead.id,
+      sender: "bot",
+      content:
+        "Lead capturado. Esperando que abra WhatsApp (handshake user-initiated).",
+      raw_payload: {
+        type: "handshake_pending",
+        tenant_id: tenant.id,
+        whatsappDeepLink,
+      },
+    });
+
+    // Optional Plan A: try template only if explicitly enabled and approved.
+    const handshakeMode =
+      process.env.WHATSAPP_HANDSHAKE_MODE || "user_initiated";
+    let templateSent = false;
+    let templateError: string | null = null;
+
+    if (handshakeMode === "template") {
+      try {
+        const adapter = new YCloudAdapter(
+          tenant.ycloud_api_key,
+          tenant.whatsapp_from,
         );
+        const templateName =
+          process.env.YCLOUD_WELCOME_TEMPLATE_NAME || "followuplead";
+        const templateLanguage =
+          process.env.YCLOUD_WELCOME_TEMPLATE_LANG || "es";
+        await adapter.sendTemplate(phone, templateName, templateLanguage, [
+          { name: "nombres", text: name },
+          { name: "empresa", text: tenant.name },
+        ]);
+        templateSent = true;
+      } catch (error) {
+        templateError =
+          error instanceof Error ? error.message : "Template send failed";
+        console.error("Optional template welcome failed", error);
       }
-
-      const adapter = new YCloudAdapter(
-        tenant.ycloud_api_key,
-        tenant.whatsapp_from.startsWith("+")
-          ? tenant.whatsapp_from
-          : `+${tenant.whatsapp_from.replace(/[^\d]/g, "")}`,
-      );
-
-      // Outside the 24h window Meta only allows approved templates.
-      const templateName =
-        process.env.YCLOUD_WELCOME_TEMPLATE_NAME || "followuplead";
-      const templateLanguage =
-        process.env.YCLOUD_WELCOME_TEMPLATE_LANG || "es";
-      // {{empresa}} = nombre del tenant/cliente, no un valor fijo de Katem
-      const empresa = tenant.name;
-
-      await adapter.sendTemplate(phone, templateName, templateLanguage, [
-        { name: "nombres", text: name },
-        { name: "empresa", text: empresa },
-      ]);
-
-      await supabase.from("messages").insert({
-        lead_id: lead.id,
-        sender: "bot",
-        content: welcomeText,
-        raw_payload: {
-          type: "welcome_template",
-          tenant_id: tenant.id,
-          templateName,
-          templateLanguage,
-          variables: { nombres: name, empresa },
-        },
-      });
-    } catch (whatsappError) {
-      const detail =
-        whatsappError instanceof Error
-          ? whatsappError.message
-          : "Unknown WhatsApp error";
-      console.error("WhatsApp welcome failed", whatsappError);
-      return NextResponse.json(
-        {
-          ok: true,
-          warning:
-            "Lead saved but WhatsApp welcome could not be sent. If error 131047, use an approved template outside the 24h window.",
-          whatsappError: detail,
-          debug: {
-            tenantId: tenant.id,
-            hasApiKey: Boolean(tenant.ycloud_api_key),
-            whatsappFrom: tenant.whatsapp_from
-              ? `${tenant.whatsapp_from.slice(0, 4)}…`
-              : null,
-            toPhone: phone,
-          },
-          lead,
-          conversation,
-          tenantId: tenant.id,
-        },
-        { status: 201 },
-      );
     }
 
     return NextResponse.json(
       {
         ok: true,
+        handshakeMode: templateSent ? "template" : "user_initiated",
+        whatsappDeepLink,
+        handshakeMessage,
+        templateSent,
+        templateError,
         lead: { ...lead, status: "IN_QUALIFICATION" },
         conversation,
         tenantId: tenant.id,
+        tenantName: tenant.name,
       },
       { status: 201 },
     );

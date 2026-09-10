@@ -23,19 +23,32 @@ export default async function FunnelPage({ searchParams }: FunnelPageProps) {
 
   const niche = tenant?.niche ?? nicheFromQuery;
   const clientId = tenant?.id ?? defaultClientIdForNiche(niche);
+  const resolvedTenant = tenant ?? (await getTenantById(clientId));
   const config = {
     ...NICHE_CONFIGS[niche],
-    ...(tenant?.hero_image ? { heroImage: tenant.hero_image } : {}),
-    ...(tenant?.primary_color
-      ? { primaryColor: tenant.primary_color, primaryColorHover: tenant.primary_color }
+    ...(resolvedTenant?.hero_image
+      ? { heroImage: resolvedTenant.hero_image }
       : {}),
-    ...(tenant?.name
+    ...(resolvedTenant?.primary_color
+      ? {
+          primaryColor: resolvedTenant.primary_color,
+          primaryColorHover: resolvedTenant.primary_color,
+        }
+      : {}),
+    ...(resolvedTenant?.name
       ? {
           title: `${NICHE_CONFIGS[niche].title}`,
-          subtitle: `${NICHE_CONFIGS[niche].subtitle} · ${tenant.name}`,
+          subtitle: `${NICHE_CONFIGS[niche].subtitle} · ${resolvedTenant.name}`,
         }
       : {}),
   };
 
-  return <FunnelLanding niche={niche} config={config} clientId={clientId} />;
+  return (
+    <FunnelLanding
+      niche={niche}
+      config={config}
+      clientId={clientId}
+      tenantName={resolvedTenant?.name}
+    />
+  );
 }

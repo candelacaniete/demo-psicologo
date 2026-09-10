@@ -14,6 +14,10 @@ export interface TenantRecord {
   custom_system_prompt: string | null;
   primary_color?: string | null;
   hero_image?: string | null;
+  /** e.g. inmobiliaria.katem.store */
+  subdomain?: string | null;
+  /** e.g. www.cliente.com */
+  custom_domain?: string | null;
 }
 
 export interface RunAgentParams {

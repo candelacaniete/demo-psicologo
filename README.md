@@ -1,52 +1,44 @@
-# Katem — Catálogo de demos + Funnel multi-tenant
+# Katem — Catálogo + Funnel multi-tenant vendible
+
+Dominio raíz: **katem.store**
+
+## Plan B (activo ahora): handshake por wa.me
+
+Meta pide verificación de empresa y plantillas Approved para escribir primero.
+Hasta que eso esté listo, el funnel funciona así:
+
+1. Lead completa el form → se guarda en Supabase  
+2. La web muestra **Continuar por WhatsApp** (`wa.me`)  
+3. El lead envía el mensaje precargado (él inicia)  
+4. Se abre la ventana de 24h → webhook → agente IA responde en texto libre  
+
+No requiere plantilla Approved ni business verification para el primer contacto.
+
+Cuando Meta apruebe plantillas: `WHATSAPP_HANDSHAKE_MODE=template`.
+
+## Multi-dominio (escalable / vendible)
+
+Misma app, un tenant por cliente:
+
+| Tipo | Ejemplo | Resolución |
+|---|---|---|
+| Query | `katem.store/funnel?client_id=sec_inmobiliaria_123` | `client_id` |
+| Subdominio | `inmobiliaria.katem.store` | `tenants.subdomain` |
+| Dominio propio | `www.cliente.com` | `tenants.custom_domain` |
+
+En Vercel: agregar dominios/wildcard `*.katem.store` + dominios custom del cliente.
+En DNS del cliente: CNAME → Vercel.
+
+Correr también: `supabase/migration_multidomain.sql`
 
 ## Rutas
 
-- `/` — home del catálogo (identidad Katem)
-- `/psicologos` — demo ficticia Dra. Camila Ríos
-- `/funnel?nicho=inmobiliaria&client_id=sec_inmobiliaria_123` — landing multi-tenant
-- `/admin` — dashboard realtime de leads
+- `/` catálogo Katem  
+- `/psicologos` demo psicóloga  
+- `/funnel` landing multi-tenant  
+- `/admin` dashboard realtime  
+- `/api/webhooks/ycloud` ← `https://katem.store/api/webhooks/ycloud`
 
-## Flujo AI multi-tenant
+## Env mínimas
 
-1. Landing captura lead con `client_id` → `POST /api/leads/capture`
-2. Lead queda bajo `tenant_id` + bienvenida WhatsApp con API key del tenant
-3. Respuestas llegan a `/api/webhooks/ycloud`
-4. `runAIAgent` carga historial, system prompt del nicho + custom del tenant, y usa tools:
-   - `saveCollectedData`
-   - `qualifyLead`
-   - `sendWhatsAppInteractive`
-5. Admin ve métricas/leads en vivo
-
-## Setup
-
-Dominio de producción: **https://katem.store**
-
-```bash
-cp .env.example .env.local
-# completar Supabase + YCLOUD_* + OPENAI_API_KEY
-```
-
-1. Ejecutá `supabase/schema.sql` en Supabase.
-2. En YCloud, apuntá el webhook de mensajes entrantes a:
-
-```text
-https://katem.store/api/webhooks/ycloud
-```
-
-3. Probá la landing:
-
-```text
-https://katem.store/funnel?nicho=inmobiliaria&client_id=sec_inmobiliaria_123
-```
-
-4. Dashboard:
-
-```text
-https://katem.store/admin
-```
-
-```bash
-npm install
-npm run dev
-```
+Ver `.env.example` (`WHATSAPP_HANDSHAKE_MODE=user_initiated` por default).

@@ -17,12 +17,14 @@ type FunnelLandingProps = {
   niche: NicheType;
   config: NicheConfig;
   clientId: string;
+  tenantName?: string;
 };
 
 export default function FunnelLanding({
   niche,
   config,
   clientId,
+  tenantName,
 }: FunnelLandingProps) {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -32,6 +34,7 @@ export default function FunnelLanding({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [whatsappDeepLink, setWhatsappDeepLink] = useState<string | null>(null);
 
   const theme = useMemo(
     () => ({
@@ -50,6 +53,7 @@ export default function FunnelLanding({
     setIsSubmitting(true);
     setFeedback(null);
     setError(null);
+    setWhatsappDeepLink(null);
 
     try {
       const response = await fetch("/api/leads/capture", {
@@ -67,27 +71,19 @@ export default function FunnelLanding({
 
       const payload = (await response.json()) as {
         error?: string;
-        warning?: string;
-        whatsappError?: string;
-        debug?: Record<string, unknown>;
         ok?: boolean;
+        whatsappDeepLink?: string;
+        tenantName?: string;
       };
 
       if (!response.ok) {
         throw new Error(payload.error ?? "No se pudo guardar el lead");
       }
 
-      if (payload.warning) {
-        setFeedback(
-          `${payload.warning}${
-            payload.whatsappError ? ` Detalle: ${payload.whatsappError}` : ""
-          }`,
-        );
-      } else {
-        setFeedback(
-          "Listo. Te vamos a escribir por WhatsApp en unos minutos.",
-        );
-      }
+      setFeedback(
+        "Datos guardados. Para activar el asistente, abrí WhatsApp y enviá el mensaje precargado.",
+      );
+      setWhatsappDeepLink(payload.whatsappDeepLink ?? null);
       setName("");
       setPhone("");
       setInitialInterest("");
@@ -110,13 +106,14 @@ export default function FunnelLanding({
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
               Funnel multi-tenant
             </p>
-            <p className="mt-1 text-lg font-semibold tracking-tight">Katem Demo Lab</p>
-            <p className="mt-1 font-mono text-xs text-zinc-500">client_id: {clientId}</p>
+            <p className="mt-1 text-lg font-semibold tracking-tight">
+              {tenantName || "Katem Demo Lab"}
+            </p>
+            <p className="mt-1 font-mono text-xs text-zinc-500">
+              client_id: {clientId}
+            </p>
           </div>
-          <nav
-            aria-label="Nichos"
-            className="flex flex-wrap gap-2"
-          >
+          <nav aria-label="Nichos" className="flex flex-wrap gap-2">
             {NICHE_LIST.map((item) => {
               const active = item.id === niche;
               return (
@@ -166,79 +163,112 @@ export default function FunnelLanding({
         </section>
 
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-[0_20px_50px_rgba(24,24,27,0.06)] md:p-8">
-          <h2 className="text-xl font-semibold tracking-tight">Dejá tus datos</h2>
-          <p className="mt-2 text-sm text-zinc-500">
-            Te contactamos por WhatsApp para calificar tu consulta automáticamente.
-          </p>
+          {whatsappDeepLink ? (
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold tracking-tight">
+                Un paso más: abrí WhatsApp
+              </h2>
+              <p className="text-sm leading-relaxed text-zinc-600">
+                Para poder responderte automáticamente (sin plantillas de Meta),
+                tenés que iniciar la conversación. Tocá el botón, enviá el
+                mensaje precargado y el asistente continúa solo.
+              </p>
+              <a
+                href={whatsappDeepLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex w-full items-center justify-center rounded-xl bg-[#25D366] px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-[#1ebe57]"
+              >
+                Continuar por WhatsApp
+              </a>
+              {feedback ? (
+                <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                  {feedback}
+                </p>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setWhatsappDeepLink(null)}
+                className="text-sm text-zinc-500 underline-offset-2 hover:underline"
+              >
+                Cargar otro lead
+              </button>
+            </div>
+          ) : (
+            <>
+              <h2 className="text-xl font-semibold tracking-tight">
+                Dejá tus datos
+              </h2>
+              <p className="mt-2 text-sm text-zinc-500">
+                Después te pedimos abrir WhatsApp un segundo para activar el
+                asistente.
+              </p>
 
-          <form className="mt-6 space-y-4" onSubmit={onSubmit}>
-            <label className="block text-sm font-medium text-zinc-700">
-              {config.fields.nameLabel}
-              <input
-                required
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-zinc-400 focus:bg-white"
-                placeholder="Tu nombre"
-              />
-            </label>
+              <form className="mt-6 space-y-4" onSubmit={onSubmit}>
+                <label className="block text-sm font-medium text-zinc-700">
+                  {config.fields.nameLabel}
+                  <input
+                    required
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-zinc-400 focus:bg-white"
+                    placeholder="Tu nombre"
+                  />
+                </label>
 
-            <label className="block text-sm font-medium text-zinc-700">
-              {config.fields.phoneLabel}
-              <div className="mt-1.5 flex gap-2">
-                <select
-                  value={countryCode}
-                  onChange={(event) => setCountryCode(event.target.value)}
-                  className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm outline-none focus:border-zinc-400"
-                  aria-label="Código de país"
+                <label className="block text-sm font-medium text-zinc-700">
+                  {config.fields.phoneLabel}
+                  <div className="mt-1.5 flex gap-2">
+                    <select
+                      value={countryCode}
+                      onChange={(event) => setCountryCode(event.target.value)}
+                      className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm outline-none focus:border-zinc-400"
+                      aria-label="Código de país"
+                    >
+                      {COUNTRY_CODES.map((item) => (
+                        <option key={item.code} value={item.code}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      required
+                      value={phone}
+                      onChange={(event) => setPhone(event.target.value)}
+                      className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-zinc-400 focus:bg-white"
+                      placeholder="11 2345 6789"
+                      inputMode="tel"
+                    />
+                  </div>
+                </label>
+
+                <label className="block text-sm font-medium text-zinc-700">
+                  {config.fields.interestLabel}
+                  <textarea
+                    required
+                    value={initialInterest}
+                    onChange={(event) => setInitialInterest(event.target.value)}
+                    className="mt-1.5 min-h-[96px] w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-zinc-400 focus:bg-white"
+                    placeholder={config.fields.interestPlaceholder}
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className={`w-full rounded-xl px-4 py-3 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${theme.button}`}
                 >
-                  {COUNTRY_CODES.map((item) => (
-                    <option key={item.code} value={item.code}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  required
-                  value={phone}
-                  onChange={(event) => setPhone(event.target.value)}
-                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-zinc-400 focus:bg-white"
-                  placeholder="11 2345 6789"
-                  inputMode="tel"
-                />
-              </div>
-            </label>
+                  {isSubmitting ? "Enviando..." : config.fields.ctaLabel}
+                </button>
+              </form>
 
-            <label className="block text-sm font-medium text-zinc-700">
-              {config.fields.interestLabel}
-              <textarea
-                required
-                value={initialInterest}
-                onChange={(event) => setInitialInterest(event.target.value)}
-                className="mt-1.5 min-h-[96px] w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-zinc-400 focus:bg-white"
-                placeholder={config.fields.interestPlaceholder}
-              />
-            </label>
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className={`w-full rounded-xl px-4 py-3 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${theme.button}`}
-            >
-              {isSubmitting ? "Enviando..." : config.fields.ctaLabel}
-            </button>
-          </form>
-
-          {feedback ? (
-            <p className="mt-4 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-              {feedback}
-            </p>
-          ) : null}
-          {error ? (
-            <p className="mt-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">
-              {error}
-            </p>
-          ) : null}
+              {error ? (
+                <p className="mt-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                  {error}
+                </p>
+              ) : null}
+            </>
+          )}
         </section>
       </main>
     </div>
