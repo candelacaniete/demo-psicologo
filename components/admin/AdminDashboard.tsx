@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getSupabaseBrowser } from "@/src/lib/supabase/client";
 import { formatQualificationSummary } from "@/src/lib/qualification/formQualify";
 import type {
   Lead,
@@ -62,22 +61,22 @@ export default function AdminDashboard() {
 
   const loadLeads = useCallback(async () => {
     try {
-      const supabase = getSupabaseBrowser();
-      const { data, error: queryError } = await supabase
-        .from("leads")
-        .select(
-          "*, conversations(current_step, is_qualified, updated_at, collected_data)",
-        )
-        .order("created_at", { ascending: false });
+      const response = await fetch("/api/admin/leads", { cache: "no-store" });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        leads?: LeadWithConversation[];
+        error?: string;
+      };
 
-      if (queryError) {
-        throw new Error(queryError.message);
+      if (!response.ok || payload.error) {
+        throw new Error(payload.error ?? "No se pudieron cargar los leads");
       }
 
-      const rows = ((data ?? []) as LeadWithConversation[]).map(flattenLead);
-      setLeads(rows);
+      setLeads((payload.leads ?? []).map(flattenLead));
       setError(null);
+      setLive(true);
     } catch (loadError) {
+      setLive(false);
       setError(
         loadError instanceof Error
           ? loadError.message
@@ -90,7 +89,7 @@ export default function AdminDashboard() {
 
   const loadFunnelEvents = useCallback(async () => {
     try {
-      const response = await fetch("/api/funnel/events");
+      const response = await fetch("/api/funnel/events", { cache: "no-store" });
       const payload = (await response.json()) as {
         counts?: FunnelCounts;
         warning?: string;
@@ -108,49 +107,11 @@ export default function AdminDashboard() {
     void loadFunnelEvents();
 
     const interval = window.setInterval(() => {
+      void loadLeads();
       void loadFunnelEvents();
-    }, 15000);
+    }, 8000);
 
-    let channel: ReturnType<
-      ReturnType<typeof getSupabaseBrowser>["channel"]
-    > | null = null;
-
-    try {
-      const supabase = getSupabaseBrowser();
-      channel = supabase
-        .channel("admin-dashboard")
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "leads" },
-          () => {
-            void loadLeads();
-          },
-        )
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "conversations" },
-          () => {
-            void loadLeads();
-          },
-        )
-        .subscribe((status) => {
-          setLive(status === "SUBSCRIBED");
-        });
-    } catch (realtimeError) {
-      setError(
-        realtimeError instanceof Error
-          ? realtimeError.message
-          : "Realtime no disponible",
-      );
-    }
-
-    return () => {
-      window.clearInterval(interval);
-      if (channel) {
-        const supabase = getSupabaseBrowser();
-        void supabase.removeChannel(channel);
-      }
-    };
+    return () => window.clearInterval(interval);
   }, [loadLeads, loadFunnelEvents]);
 
   const metrics = useMemo(() => {
@@ -202,7 +163,7 @@ export default function AdminDashboard() {
                   live ? "bg-emerald-400" : "bg-zinc-500",
                 ].join(" ")}
               />
-              {live ? "Realtime on" : "Realtime off"}
+              {live ? "Polling on" : "Polling off"}
             </span>
             <a
               href="/"
