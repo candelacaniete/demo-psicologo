@@ -39,12 +39,16 @@ export default function FunnelLanding({
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [whatsappDeepLink, setWhatsappDeepLink] = useState<string | null>(null);
+  const [templateSent, setTemplateSent] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [resultStatus, setResultStatus] = useState<LeadStatus | null>(null);
   const [resultScore, setResultScore] = useState<number | null>(null);
 
   useEffect(() => {
     setAnswers({});
     setWhatsappDeepLink(null);
+    setTemplateSent(false);
+    setSubmitted(false);
     setFeedback(null);
     setResultStatus(null);
     setResultScore(null);
@@ -92,6 +96,8 @@ export default function FunnelLanding({
         error?: string;
         ok?: boolean;
         whatsappDeepLink?: string;
+        templateSent?: boolean;
+        handshakeMode?: string;
         qualification?: { score: number; status: LeadStatus };
       };
 
@@ -101,8 +107,12 @@ export default function FunnelLanding({
 
       setResultStatus(payload.qualification?.status ?? null);
       setResultScore(payload.qualification?.score ?? null);
+      setTemplateSent(Boolean(payload.templateSent));
+      setSubmitted(true);
       setFeedback(
-        "Listo: ya estás en el dashboard del equipo. Continuá por WhatsApp para hablar con un asesor.",
+        payload.templateSent
+          ? "Listo: te enviamos el primer mensaje por WhatsApp con la plantilla aprobada."
+          : "Listo: ya estás en el dashboard. Continuá por WhatsApp para hablar con un asesor.",
       );
       setWhatsappDeepLink(payload.whatsappDeepLink ?? null);
       setName("");
@@ -185,10 +195,12 @@ export default function FunnelLanding({
         </section>
 
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-[0_20px_50px_rgba(24,24,27,0.06)] md:p-8">
-          {whatsappDeepLink ? (
+          {submitted ? (
             <div className="space-y-4">
               <h2 className="text-xl font-semibold tracking-tight">
-                Datos recibidos
+                {templateSent
+                  ? "Te escribimos por WhatsApp"
+                  : "Datos recibidos"}
               </h2>
               {resultStatus ? (
                 <p className="text-sm text-zinc-600">
@@ -200,17 +212,20 @@ export default function FunnelLanding({
                 </p>
               ) : null}
               <p className="text-sm leading-relaxed text-zinc-600">
-                El equipo ya ve tu consulta en el panel. Si querés seguir ahora,
-                abrí WhatsApp y enviá el mensaje precargado.
+                {templateSent
+                  ? "Revisá tus mensajes: ya salió el primer contacto con la plantilla aprobada. Cuando respondás, el agente puede seguir en texto libre."
+                  : "El equipo ya ve tu consulta en el panel. Si querés seguir ahora, abrí WhatsApp y enviá el mensaje precargado."}
               </p>
-              <a
-                href={whatsappDeepLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex w-full items-center justify-center rounded-xl bg-[#25D366] px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-[#1ebe57]"
-              >
-                Continuar por WhatsApp
-              </a>
+              {whatsappDeepLink ? (
+                <a
+                  href={whatsappDeepLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex w-full items-center justify-center rounded-xl bg-[#25D366] px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-[#1ebe57]"
+                >
+                  {templateSent ? "Abrir WhatsApp" : "Continuar por WhatsApp"}
+                </a>
+              ) : null}
               {feedback ? (
                 <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
                   {feedback}
@@ -219,6 +234,8 @@ export default function FunnelLanding({
               <button
                 type="button"
                 onClick={() => {
+                  setSubmitted(false);
+                  setTemplateSent(false);
                   setWhatsappDeepLink(null);
                   setResultStatus(null);
                   setResultScore(null);

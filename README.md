@@ -8,8 +8,23 @@ Landings de conversión por vertical con:
 
 1. Formulario en **2 pasos** (calificación + contacto)
 2. Score HOT / WARM / COLD guardado en Supabase
-3. Continuidad por **WhatsApp** (`wa.me`, modo user-initiated)
+3. Primer contacto por **plantilla WhatsApp** (aprobada) + continuidad IA
 4. Tracking de embudo (`funnel_events`) + admin realtime
+
+## Handshake WhatsApp (Plan A activo)
+
+Con cuenta de empresa verificada + plantilla **Approved** (aunque sea categoría **MARKETING**):
+
+1. Lead completa el form → calificación en DB  
+2. El backend envía `followuplead` por YCloud (`nombres`, `empresa`)  
+3. El lead responde → se abre ventana 24h → agente IA en texto libre  
+
+`WHATSAPP_HANDSHAKE_MODE=template` (default).
+
+- Si el template falla → fallback automático a `wa.me`
+- Leads `DISCARDED` no consumen plantilla marketing (límite de calidad/volumen)
+
+Marketing vs Utility: para follow-up de leads Meta suele clasificar como Marketing. Funciona igual para abrir la conversación; solo cambia pricing/límites de mensajería marketing.
 
 ## Rutas
 
@@ -37,16 +52,13 @@ Landings de conversión por vertical con:
 2. `supabase/migration_multidomain.sql`
 3. **`supabase/migration_funnel_events.sql`** ← eventos del embudo
 
-## Handshake WhatsApp (Plan B)
-
-Meta bloquea texto libre outbound sin ventana 24h. Flujo activo:
-
-1. Lead completa el form → calificación en DB  
-2. CTA **Continuar por WhatsApp** (`wa.me`)  
-3. El lead inicia el chat → webhook → agente IA  
-
-`WHATSAPP_HANDSHAKE_MODE=user_initiated` (default).
-
 ## Env mínimas
 
-Ver `.env.example`.
+Ver `.env.example`. En Vercel setear:
+
+```
+WHATSAPP_HANDSHAKE_MODE=template
+YCLOUD_WELCOME_TEMPLATE_NAME=followuplead
+YCLOUD_WELCOME_TEMPLATE_LANG=es
+YCLOUD_WELCOME_TEMPLATE_CATEGORY=MARKETING
+```

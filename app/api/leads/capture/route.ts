@@ -110,11 +110,17 @@ export async function POST(request: Request) {
 
     await supabase.from("conversations").delete().eq("lead_id", lead.id);
 
+    // Plan A default: business-initiated template (works for Marketing or Utility).
+    // Plan B fallback: user_initiated wa.me if template fails / is skipped.
+    const configuredMode =
+      process.env.WHATSAPP_HANDSHAKE_MODE || "template";
+    const preferTemplate = configuredMode === "template";
+
     const collectedData = {
       nombre: name,
       initial_interest: initialInterest,
       tenant_id: tenant.id,
-      handshake_mode: "user_initiated",
+      handshake_mode: preferTemplate ? "template" : "user_initiated",
       qualification_score: qualification.score,
       qualification_reasons: qualification.reasons,
       ...qualification.collectedData,
@@ -156,36 +162,25 @@ export async function POST(request: Request) {
       handshakeMessage,
     );
 
-    await supabase.from("messages").insert({
-      lead_id: lead.id,
-      sender: "bot",
-      content: `Lead calificado por formulario. Score ${qualification.score} → ${qualification.status}. Continuar por WhatsApp.`,
-      raw_payload: {
-        type: "form_qualification",
-        tenant_id: tenant.id,
-        score: qualification.score,
-        status: qualification.status,
-        reasons: qualification.reasons,
-        collectedData: qualification.collectedData,
-        whatsappDeepLink,
-      },
-    });
-
-    const handshakeMode =
-      process.env.WHATSAPP_HANDSHAKE_MODE || "user_initiated";
     let templateSent = false;
+    let templateSkipped = false;
     let templateError: string | null = null;
+    const templateName =
+      process.env.YCLOUD_WELCOME_TEMPLATE_NAME || "followuplead";
+    const templateLanguage =
+      process.env.YCLOUD_WELCOME_TEMPLATE_LANG || "es";
+    const templateCategory =
+      process.env.YCLOUD_WELCOME_TEMPLATE_CATEGORY || "MARKETING";
 
-    if (handshakeMode === "template") {
+    // Marketing templates consume daily/quality limits — skip cold leads.
+    if (preferTemplate && qualification.status === "DISCARDED") {
+      templateSkipped = true;
+    } else if (preferTemplate) {
       try {
         const adapter = new YCloudAdapter(
           tenant.ycloud_api_key,
           tenant.whatsapp_from,
         );
-        const templateName =
-          process.env.YCLOUD_WELCOME_TEMPLATE_NAME || "followuplead";
-        const templateLanguage =
-          process.env.YCLOUD_WELCOME_TEMPLATE_LANG || "es";
         await adapter.sendTemplate(phone, templateName, templateLanguage, [
           { name: "nombres", text: name },
           { name: "empresa", text: tenant.name },
@@ -194,18 +189,60 @@ export async function POST(request: Request) {
       } catch (error) {
         templateError =
           error instanceof Error ? error.message : "Template send failed";
-        console.error("Optional template welcome failed", error);
+        console.error("Template welcome failed; falling back to wa.me", error);
       }
     }
+
+    const effectiveHandshake = templateSent ? "template" : "user_initiated";
+
+    if (effectiveHandshake !== collectedData.handshake_mode) {
+      await supabase
+        .from("conversations")
+        .update({
+          collected_data: {
+            ...collectedData,
+            handshake_mode: effectiveHandshake,
+            template_error: templateError,
+            template_skipped: templateSkipped,
+          },
+        })
+        .eq("id", conversation.id);
+    }
+
+    await supabase.from("messages").insert({
+      lead_id: lead.id,
+      sender: "bot",
+      content: templateSent
+        ? `Lead calificado. Score ${qualification.score} → ${qualification.status}. Template ${templateName} (${templateCategory}) enviado.`
+        : `Lead calificado. Score ${qualification.score} → ${qualification.status}. Continuidad por wa.me${templateError ? ` (template falló)` : templateSkipped ? ` (template omitido)` : ""}.`,
+      raw_payload: {
+        type: "form_qualification",
+        tenant_id: tenant.id,
+        score: qualification.score,
+        status: qualification.status,
+        reasons: qualification.reasons,
+        collectedData: qualification.collectedData,
+        whatsappDeepLink,
+        handshakeMode: effectiveHandshake,
+        templateSent,
+        templateSkipped,
+        templateError,
+        templateName,
+        templateCategory,
+      },
+    });
 
     return NextResponse.json(
       {
         ok: true,
-        handshakeMode: templateSent ? "template" : "user_initiated",
+        handshakeMode: effectiveHandshake,
         whatsappDeepLink,
         handshakeMessage,
         templateSent,
+        templateSkipped,
         templateError,
+        templateName,
+        templateCategory,
         qualification: {
           score: qualification.score,
           status: qualification.status,

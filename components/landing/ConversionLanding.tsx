@@ -44,6 +44,8 @@ export default function ConversionLanding({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [whatsappDeepLink, setWhatsappDeepLink] = useState<string | null>(null);
+  const [templateSent, setTemplateSent] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [resultStatus, setResultStatus] = useState<LeadStatus | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
@@ -106,6 +108,8 @@ export default function ConversionLanding({
       const payload = (await response.json()) as {
         error?: string;
         whatsappDeepLink?: string;
+        templateSent?: boolean;
+        handshakeMode?: string;
         qualification?: { status: LeadStatus; score: number };
         lead?: { id: string };
       };
@@ -116,6 +120,8 @@ export default function ConversionLanding({
 
       const status = payload.qualification?.status ?? "IN_QUALIFICATION";
       setResultStatus(status);
+      setTemplateSent(Boolean(payload.templateSent));
+      setSubmitted(true);
       setWhatsappDeepLink(payload.whatsappDeepLink ?? null);
 
       void trackFunnelEvent({
@@ -123,7 +129,12 @@ export default function ConversionLanding({
         niche,
         tenantId: resolvedClientId,
         leadId: payload.lead?.id,
-        meta: { status, score: payload.qualification?.score },
+        meta: {
+          status,
+          score: payload.qualification?.score,
+          handshakeMode: payload.handshakeMode,
+          templateSent: Boolean(payload.templateSent),
+        },
       });
 
       if (status === "QUALIFIED_HOT") {
@@ -146,6 +157,16 @@ export default function ConversionLanding({
           niche,
           tenantId: resolvedClientId,
           leadId: payload.lead?.id,
+        });
+      }
+
+      if (payload.templateSent) {
+        void trackFunnelEvent({
+          event: "whatsapp_click",
+          niche,
+          tenantId: resolvedClientId,
+          leadId: payload.lead?.id,
+          meta: { source: "template_outbound" },
         });
       }
     } catch (submitError) {
@@ -205,36 +226,51 @@ export default function ConversionLanding({
             id="formulario"
             className={`scroll-mt-24 rounded-2xl ${theme.surface} p-5 shadow-[0_24px_60px_rgba(0,0,0,0.22)] md:p-7 ${theme.text}`}
           >
-            {whatsappDeepLink ? (
+            {submitted ? (
               <div className="space-y-4">
                 <p className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${theme.accentSoft}`}>
                   {resultStatus ?? "ENVIADO"}
                 </p>
                 <h2 className="font-fraunces text-2xl tracking-tight">
-                  Recibimos tu consulta
+                  {templateSent
+                    ? "Te escribimos por WhatsApp"
+                    : "Recibimos tu consulta"}
                 </h2>
                 <p className={`text-sm leading-relaxed ${theme.muted}`}>
-                  {resultCopy}
+                  {templateSent
+                    ? `${resultCopy} Revisá tus mensajes: ya te llegó el primer contacto.`
+                    : resultCopy}
                 </p>
-                <a
-                  href={whatsappDeepLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() =>
-                    void trackFunnelEvent({
-                      event: "whatsapp_click",
-                      niche,
-                      tenantId: resolvedClientId,
-                    })
-                  }
-                  className="inline-flex w-full items-center justify-center rounded-full bg-[#25D366] px-4 py-3.5 text-sm font-semibold text-white hover:bg-[#1ebe57]"
-                >
-                  Continuar por WhatsApp
-                </a>
+                {whatsappDeepLink ? (
+                  <a
+                    href={whatsappDeepLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() =>
+                      void trackFunnelEvent({
+                        event: "whatsapp_click",
+                        niche,
+                        tenantId: resolvedClientId,
+                      })
+                    }
+                    className="inline-flex w-full items-center justify-center rounded-full bg-[#25D366] px-4 py-3.5 text-sm font-semibold text-white hover:bg-[#1ebe57]"
+                  >
+                    {templateSent
+                      ? "Abrir WhatsApp"
+                      : "Continuar por WhatsApp"}
+                  </a>
+                ) : null}
+                {templateSent ? (
+                  <p className={`text-center text-xs ${theme.muted}`}>
+                    Si no ves el mensaje, abrí WhatsApp o revisá spam/filtros.
+                  </p>
+                ) : null}
                 <button
                   type="button"
                   className={`text-sm ${theme.muted} underline-offset-2 hover:underline`}
                   onClick={() => {
+                    setSubmitted(false);
+                    setTemplateSent(false);
                     setWhatsappDeepLink(null);
                     setStep(1);
                     setAnswers({});
@@ -522,7 +558,7 @@ export default function ConversionLanding({
       </section>
 
       {/* Sticky mobile CTA */}
-      {!whatsappDeepLink ? (
+      {!submitted ? (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-black/10 bg-white/95 p-3 backdrop-blur md:hidden">
           <a
             href="#formulario"
