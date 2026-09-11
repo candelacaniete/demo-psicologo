@@ -1,10 +1,19 @@
-import FunnelLanding from "@/components/funnel/FunnelLanding";
-import { NICHE_CONFIGS, resolveNiche } from "@/src/config/niches";
+import ConversionLanding from "@/components/landing/ConversionLanding";
+import { resolveNiche } from "@/src/config/niches";
 import {
   defaultClientIdForNiche,
   getTenantById,
   resolveClientId,
 } from "@/src/config/tenants";
+import type { NicheType } from "@/src/types/funnel";
+import { redirect } from "next/navigation";
+
+const NICHE_PATH: Record<NicheType, string> = {
+  inmobiliaria: "/inmobiliaria",
+  arquitectos: "/arquitectos",
+  abogados: "/abogados",
+  hospedajes: "/hospedajes",
+};
 
 type FunnelPageProps = {
   searchParams: {
@@ -13,6 +22,7 @@ type FunnelPageProps = {
   };
 };
 
+/** Compatibility alias → prefer /inmobiliaria|/arquitectos|/abogados|/hospedajes */
 export default async function FunnelPage({ searchParams }: FunnelPageProps) {
   const nicheFromQuery = resolveNiche(searchParams.nicho);
   const clientIdFromQuery = resolveClientId(searchParams.client_id);
@@ -23,19 +33,17 @@ export default async function FunnelPage({ searchParams }: FunnelPageProps) {
 
   const niche = tenant?.niche ?? nicheFromQuery;
   const clientId = tenant?.id ?? defaultClientIdForNiche(niche);
-  const config = {
-    ...NICHE_CONFIGS[niche],
-    ...(tenant?.hero_image ? { heroImage: tenant.hero_image } : {}),
-    ...(tenant?.primary_color
-      ? { primaryColor: tenant.primary_color, primaryColorHover: tenant.primary_color }
-      : {}),
-    ...(tenant?.name
-      ? {
-          title: `${NICHE_CONFIGS[niche].title}`,
-          subtitle: `${NICHE_CONFIGS[niche].subtitle} · ${tenant.name}`,
-        }
-      : {}),
-  };
+  const resolvedTenant = tenant ?? (await getTenantById(clientId));
 
-  return <FunnelLanding niche={niche} config={config} clientId={clientId} />;
+  if (!clientIdFromQuery && !searchParams.nicho) {
+    redirect(NICHE_PATH[niche]);
+  }
+
+  return (
+    <ConversionLanding
+      niche={niche}
+      clientId={clientId}
+      tenantName={resolvedTenant?.name}
+    />
+  );
 }

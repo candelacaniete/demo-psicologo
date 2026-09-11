@@ -1,52 +1,37 @@
-# Katem — Catálogo de demos + Funnel multi-tenant
+# Katem — Landings de conversión multi-nicho
 
-## Rutas
+Dominio: **katem.store**
 
-- `/` — home del catálogo (identidad Katem)
-- `/psicologos` — demo ficticia Dra. Camila Ríos
-- `/funnel?nicho=inmobiliaria&client_id=sec_inmobiliaria_123` — landing multi-tenant
-- `/admin` — dashboard realtime de leads
+## Flujo WhatsApp (único)
 
-## Flujo AI multi-tenant
+1. Form → califica y guarda en Supabase  
+2. CTA **Enviar por WhatsApp** (`wa.me` con datos precargados)  
+3. Cliente envía → ventana 24h  
+4. Webhook YCloud → **OpenAI** responde (YCloud solo transporta)
 
-1. Landing captura lead con `client_id` → `POST /api/leads/capture`
-2. Lead queda bajo `tenant_id` + bienvenida WhatsApp con API key del tenant
-3. Respuestas llegan a `/api/webhooks/ycloud`
-4. `runAIAgent` carga historial, system prompt del nicho + custom del tenant, y usa tools:
-   - `saveCollectedData`
-   - `qualifyLead`
-   - `sendWhatsAppInteractive`
-5. Admin ve métricas/leads en vivo
+**No se envían plantillas** desde el formulario.
 
-## Setup
+## Env Vercel
 
-Dominio de producción: **https://katem.store**
+| Variable | Origen |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase → API → Project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Publishable (`sb_publishable_...`) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Secret (`sb_secret_...`) |
+| `NEXT_PUBLIC_ROOT_DOMAIN` | `katem.store` |
+| `YCLOUD_API_KEY` | YCloud API key |
+| `YCLOUD_WHATSAPP_FROM` | `+15553082749` |
+| `WHATSAPP_HANDSHAKE_MODE` | `user_initiated` |
+| `OPENAI_API_KEY` | OpenAI |
+| `OPENAI_MODEL` | `gpt-4o-mini` |
 
-```bash
-cp .env.example .env.local
-# completar Supabase + YCLOUD_* + OPENAI_API_KEY
-```
+Webhook: `https://katem.store/api/webhooks/ycloud`  
+evento: `whatsapp.inbound_message.received`
 
-1. Ejecutá `supabase/schema.sql` en Supabase.
-2. En YCloud, apuntá el webhook de mensajes entrantes a:
+En YCloud: apagar AI/auto-reply propio.
 
-```text
-https://katem.store/api/webhooks/ycloud
-```
+## SQL
 
-3. Probá la landing:
-
-```text
-https://katem.store/funnel?nicho=inmobiliaria&client_id=sec_inmobiliaria_123
-```
-
-4. Dashboard:
-
-```text
-https://katem.store/admin
-```
-
-```bash
-npm install
-npm run dev
-```
+1. `supabase/schema.sql`  
+2. `supabase/migration_multidomain.sql`  
+3. `supabase/migration_funnel_events.sql`

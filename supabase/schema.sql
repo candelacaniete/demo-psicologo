@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS tenants (
   custom_system_prompt TEXT,
   primary_color TEXT,
   hero_image TEXT,
+  subdomain TEXT,
+  custom_domain TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

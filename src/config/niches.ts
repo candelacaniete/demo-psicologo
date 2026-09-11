@@ -7,7 +7,7 @@ export const NICHE_CONFIGS: Record<NicheType, NicheConfig> = {
     id: "inmobiliaria",
     title: "Encontrá tu próxima propiedad sin vueltas",
     subtitle:
-      "Dejanos tus datos y un asesor te escribe por WhatsApp en minutos para entender qué estás buscando.",
+      "Completá unas preguntas rápidas. Te calificamos al instante y seguís por WhatsApp con un asesor.",
     heroImage:
       "https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1600&q=80",
     primaryColor: "bg-emerald-700",

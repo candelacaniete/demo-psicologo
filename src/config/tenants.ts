@@ -18,6 +18,8 @@ export const DEMO_TENANTS: Record<string, TenantRecord> = {
     primary_color: "bg-emerald-700",
     hero_image:
       "https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1600&q=80",
+    subdomain: "inmobiliaria",
+    custom_domain: null,
   },
   sec_arquitectos_123: {
     id: "sec_arquitectos_123",
@@ -30,6 +32,8 @@ export const DEMO_TENANTS: Record<string, TenantRecord> = {
     primary_color: "bg-stone-800",
     hero_image:
       "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1600&q=80",
+    subdomain: "arquitectos",
+    custom_domain: null,
   },
   sec_abogados_123: {
     id: "sec_abogados_123",
@@ -42,6 +46,8 @@ export const DEMO_TENANTS: Record<string, TenantRecord> = {
     primary_color: "bg-slate-800",
     hero_image:
       "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=1600&q=80",
+    subdomain: "abogados",
+    custom_domain: null,
   },
   sec_hospedajes_123: {
     id: "sec_hospedajes_123",
@@ -54,6 +60,8 @@ export const DEMO_TENANTS: Record<string, TenantRecord> = {
     primary_color: "bg-teal-700",
     hero_image:
       "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1600&q=80",
+    subdomain: "hospedajes",
+    custom_domain: null,
   },
 };
 
@@ -67,6 +75,10 @@ export function resolveClientId(
 export async function getTenantById(
   tenantId: string,
 ): Promise<TenantRecord | null> {
+  const seed = DEMO_TENANTS[tenantId] ?? null;
+  const envApiKey = process.env.YCLOUD_API_KEY ?? "";
+  const envFrom = process.env.YCLOUD_WHATSAPP_FROM ?? "";
+
   try {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
@@ -76,13 +88,39 @@ export async function getTenantById(
       .maybeSingle();
 
     if (!error && data) {
-      return data as TenantRecord;
+      const row = data as TenantRecord;
+      const apiKeyLooksFake =
+        !row.ycloud_api_key ||
+        row.ycloud_api_key === "REPLACE_ME" ||
+        row.ycloud_api_key.includes("REPLACE");
+      const fromLooksFake =
+        !row.whatsapp_from ||
+        row.whatsapp_from === "REPLACE_ME" ||
+        row.whatsapp_from.includes("REPLACE");
+
+      return {
+        ...row,
+        ycloud_api_key: apiKeyLooksFake
+          ? envApiKey || seed?.ycloud_api_key || ""
+          : row.ycloud_api_key,
+        whatsapp_from: fromLooksFake
+          ? envFrom || seed?.whatsapp_from || ""
+          : row.whatsapp_from.replace(/[^\d+]/g, ""),
+      };
     }
   } catch {
     // Fall back to demo seed when DB/table is not ready.
   }
 
-  return DEMO_TENANTS[tenantId] ?? null;
+  if (!seed) {
+    return null;
+  }
+
+  return {
+    ...seed,
+    ycloud_api_key: seed.ycloud_api_key || envApiKey,
+    whatsapp_from: (seed.whatsapp_from || envFrom).replace(/[^\d+]/g, ""),
+  };
 }
 
 export async function getTenantByWhatsAppFrom(
@@ -116,4 +154,57 @@ export function defaultClientIdForNiche(niche: NicheType): string {
     (tenant) => tenant.niche === niche,
   );
   return match?.id ?? "sec_inmobiliaria_123";
+}
+
+export async function getTenantByHost(
+  host: string,
+): Promise<TenantRecord | null> {
+  const hostname = host.split(":")[0]?.toLowerCase() ?? "";
+  const rootDomain = (process.env.NEXT_PUBLIC_ROOT_DOMAIN || "katem.store")
+    .toLowerCase()
+    .replace(/^www\./, "");
+
+  try {
+    const supabase = getSupabaseAdmin();
+    const { data: byCustom } = await supabase
+      .from("tenants")
+      .select("*")
+      .eq("custom_domain", hostname)
+      .maybeSingle();
+
+    if (byCustom) {
+      return getTenantById((byCustom as TenantRecord).id);
+    }
+
+    if (hostname.endsWith(`.${rootDomain}`)) {
+      const subdomain = hostname.replace(`.${rootDomain}`, "");
+      if (subdomain && !["www", "app", "api", "admin"].includes(subdomain)) {
+        const { data: bySub } = await supabase
+          .from("tenants")
+          .select("*")
+          .eq("subdomain", subdomain)
+          .maybeSingle();
+        if (bySub) {
+          return getTenantById((bySub as TenantRecord).id);
+        }
+      }
+    }
+  } catch {
+    // Fall through to seed map.
+  }
+
+  const seedByCustom = Object.values(DEMO_TENANTS).find(
+    (tenant) => tenant.custom_domain?.toLowerCase() === hostname,
+  );
+  if (seedByCustom) return getTenantById(seedByCustom.id);
+
+  if (hostname.endsWith(`.${rootDomain}`)) {
+    const subdomain = hostname.replace(`.${rootDomain}`, "");
+    const seedBySub = Object.values(DEMO_TENANTS).find(
+      (tenant) => tenant.subdomain === subdomain,
+    );
+    if (seedBySub) return getTenantById(seedBySub.id);
+  }
+
+  return null;
 }

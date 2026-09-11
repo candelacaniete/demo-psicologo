@@ -28,7 +28,8 @@ type YCloudWebhookBody = {
 };
 
 function normalizePhone(phone: string): string {
-  return phone.replace(/[^\d]/g, "");
+  const digits = phone.replace(/[^\d]/g, "");
+  return digits ? `+${digits}` : "";
 }
 
 export class YCloudAdapter {
@@ -37,10 +38,18 @@ export class YCloudAdapter {
 
   constructor(apiKey?: string, fromNumber?: string) {
     this.apiKey = apiKey || process.env.YCLOUD_API_KEY || "";
-    this.fromNumber = fromNumber || process.env.YCLOUD_WHATSAPP_FROM || "";
+    const rawFrom = fromNumber || process.env.YCLOUD_WHATSAPP_FROM || "";
+    this.fromNumber = rawFrom
+      ? rawFrom.startsWith("+")
+        ? rawFrom
+        : `+${rawFrom.replace(/[^\d]/g, "")}`
+      : "";
 
     if (!this.apiKey) {
       throw new Error("Missing YCloud API key for tenant");
+    }
+    if (!this.fromNumber) {
+      throw new Error("Missing YCloud WhatsApp From number for tenant");
     }
   }
 
@@ -141,6 +150,43 @@ export class YCloudAdapter {
       to: normalizePhone(to),
       type: "text",
       text: { body: text },
+    });
+  }
+
+  async sendTemplate(
+    to: string,
+    templateName: string,
+    languageCode: string,
+    bodyParameters: Array<string | { name: string; text: string }> = [],
+  ) {
+    const template: Record<string, unknown> = {
+      name: templateName,
+      language: { code: languageCode },
+    };
+
+    if (bodyParameters.length > 0) {
+      template.components = [
+        {
+          type: "body",
+          parameters: bodyParameters.map((param) => {
+            if (typeof param === "string") {
+              return { type: "text", text: param };
+            }
+            return {
+              type: "text",
+              parameter_name: param.name,
+              text: param.text,
+            };
+          }),
+        },
+      ];
+    }
+
+    return this.request("/whatsapp/messages", {
+      from: this.fromNumber,
+      to: normalizePhone(to),
+      type: "template",
+      template,
     });
   }
 

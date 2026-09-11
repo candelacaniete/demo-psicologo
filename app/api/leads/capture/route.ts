@@ -5,24 +5,21 @@ import {
   defaultClientIdForNiche,
   getTenantById,
 } from "@/src/config/tenants";
-import { YCloudAdapter } from "@/src/lib/adapters/ycloud.adapter";
+import { normalizePhone } from "@/src/lib/phone";
+import {
+  buildHandshakeMessage,
+  buildWhatsAppDeepLink,
+} from "@/src/lib/whatsapp/deepLink";
+import {
+  formatQualificationSummary,
+  qualifyFromForm,
+} from "@/src/lib/qualification/formQualify";
 import type { CaptureLeadPayload, Lead } from "@/src/types/funnel";
 
-function normalizePhone(phone: string, countryCode = "54"): string {
-  const digits = phone.replace(/[^\d]/g, "");
-  if (digits.startsWith(countryCode)) {
-    return digits;
-  }
-  if (digits.startsWith("0")) {
-    return `${countryCode}${digits.replace(/^0+/, "")}`;
-  }
-  return `${countryCode}${digits}`;
-}
-
-function welcomeCopy(name: string, niche: string): string {
-  return `Hola ${name} 👋 Gracias por escribirnos (${niche}). Soy el asistente virtual: contame un poco más de lo que necesitás y te ayudo a orientar la consulta.`;
-}
-
+/**
+ * Plan B only: save + qualify lead, return wa.me deep link.
+ * Never sends WhatsApp templates (avoids Meta display-name / marketing blocks).
+ */
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Partial<CaptureLeadPayload>;
@@ -31,6 +28,7 @@ export async function POST(request: Request) {
     const niche = body.niche;
     const initialInterest = body.initialInterest?.trim() ?? "";
     const countryCode = body.countryCode?.trim() || "54";
+    const qualificationAnswers = body.qualificationAnswers ?? {};
     const clientId =
       body.clientId?.trim() ||
       body.tenantId?.trim() ||
@@ -64,6 +62,7 @@ export async function POST(request: Request) {
       );
     }
 
+    const qualification = qualifyFromForm(niche, qualificationAnswers);
     const phone = normalizePhone(phoneRaw, countryCode);
     const supabase = getSupabaseAdmin();
 
@@ -75,8 +74,8 @@ export async function POST(request: Request) {
           name,
           phone,
           niche,
-          status: "NEW",
-          source: "landing",
+          status: qualification.status,
+          source: "landing_form",
           initial_interest: initialInterest || null,
         },
         { onConflict: "tenant_id,phone" },
@@ -95,17 +94,23 @@ export async function POST(request: Request) {
 
     await supabase.from("conversations").delete().eq("lead_id", lead.id);
 
+    const collectedData = {
+      nombre: name,
+      initial_interest: initialInterest,
+      tenant_id: tenant.id,
+      handshake_mode: "user_initiated",
+      qualification_score: qualification.score,
+      qualification_reasons: qualification.reasons,
+      ...qualification.collectedData,
+    };
+
     const { data: conversation, error: conversationError } = await supabase
       .from("conversations")
       .insert({
         lead_id: lead.id,
-        current_step: "ai_agent",
-        collected_data: {
-          nombre: name,
-          initial_interest: initialInterest,
-          tenant_id: tenant.id,
-        },
-        is_qualified: false,
+        current_step: "form_qualified",
+        collected_data: collectedData,
+        is_qualified: qualification.isQualified,
       })
       .select("*")
       .single();
@@ -120,49 +125,55 @@ export async function POST(request: Request) {
       );
     }
 
-    await supabase
-      .from("leads")
-      .update({ status: "IN_QUALIFICATION" })
-      .eq("id", lead.id);
+    const summary = formatQualificationSummary(collectedData);
+    const handshakeMessage = buildHandshakeMessage({
+      leadName: name,
+      empresa: tenant.name,
+      niche,
+      initialInterest,
+      qualificationSummary: summary,
+    });
 
-    const welcomeText = welcomeCopy(name, niche);
+    const whatsappDeepLink = buildWhatsAppDeepLink(
+      tenant.whatsapp_from || process.env.YCLOUD_WHATSAPP_FROM || "",
+      handshakeMessage,
+    );
 
-    try {
-      const adapter = new YCloudAdapter(
-        tenant.ycloud_api_key,
-        tenant.whatsapp_from,
-      );
-      await adapter.sendText(phone, welcomeText);
-      await supabase.from("messages").insert({
-        lead_id: lead.id,
-        sender: "bot",
-        content: welcomeText,
-        raw_payload: {
-          type: "welcome",
-          tenant_id: tenant.id,
-        },
-      });
-    } catch (whatsappError) {
-      console.error("WhatsApp welcome failed", whatsappError);
-      return NextResponse.json(
-        {
-          ok: true,
-          warning:
-            "Lead saved but WhatsApp welcome could not be sent. Check tenant YCloud credentials.",
-          lead,
-          conversation,
-          tenantId: tenant.id,
-        },
-        { status: 201 },
-      );
-    }
+    await supabase.from("messages").insert({
+      lead_id: lead.id,
+      sender: "bot",
+      content: `Consulta calificada (${qualification.status}). Esperando primer mensaje del cliente por WhatsApp.`,
+      raw_payload: {
+        type: "form_qualification",
+        tenant_id: tenant.id,
+        score: qualification.score,
+        status: qualification.status,
+        reasons: qualification.reasons,
+        collectedData: qualification.collectedData,
+        whatsappDeepLink,
+        handshakeMode: "user_initiated",
+        handshakeMessage,
+        templateSent: false,
+      },
+    });
 
     return NextResponse.json(
       {
         ok: true,
-        lead: { ...lead, status: "IN_QUALIFICATION" },
+        handshakeMode: "user_initiated",
+        whatsappDeepLink,
+        handshakeMessage,
+        templateSent: false,
+        qualification: {
+          score: qualification.score,
+          status: qualification.status,
+          isQualified: qualification.isQualified,
+          reasons: qualification.reasons,
+        },
+        lead: { ...lead, status: qualification.status },
         conversation,
         tenantId: tenant.id,
+        tenantName: tenant.name,
       },
       { status: 201 },
     );

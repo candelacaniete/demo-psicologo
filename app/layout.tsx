@@ -42,15 +42,15 @@ const workSans = Work_Sans({
 
 export const metadata: Metadata = {
   title: {
-    default: "Katem — Catálogo de demos",
+    default: "Katem — Landings de conversión",
     template: "%s · Katem",
   },
   description:
-    "Catálogo de demos web hechas por Katem para profesionales de la salud y el bienestar. Elegí tu especialidad y mirá cómo se vería tu propia web.",
+    "Landings de conversión multi-nicho: formulario de 2 pasos, calificación al instante y continuidad por WhatsApp.",
   openGraph: {
-    title: "Katem — Catálogo de demos",
+    title: "Katem — Landings de conversión",
     description:
-      "Demos en vivo, no promesas en PDF. Sitios hechos para profesionales de la salud y el bienestar.",
+      "Inmobiliaria, arquitectos, abogados y hospedajes. Embudo medible con admin en tiempo real.",
     locale: "es_AR",
     type: "website",
   },

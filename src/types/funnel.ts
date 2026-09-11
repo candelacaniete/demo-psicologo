@@ -75,6 +75,8 @@ export interface CaptureLeadPayload {
   countryCode?: string;
   clientId?: string;
   tenantId?: string;
+  /** Respuestas de calificación del formulario por nicho */
+  qualificationAnswers?: Record<string, string>;
 }
 
 export interface StandardMessage {
