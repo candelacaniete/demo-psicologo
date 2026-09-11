@@ -25,7 +25,8 @@ Dominio: **katem.store**
 | `OPENAI_API_KEY` | OpenAI |
 | `OPENAI_MODEL` | `gpt-4o-mini` |
 
-Webhook: `https://katem.store/api/webhooks/ycloud`  
+Webhook: **`https://www.katem.store/api/webhooks/ycloud`**  
+(usar `www` — apex `katem.store` hace 308 y puede romper el POST)  
 evento: `whatsapp.inbound_message.received`
 
 En YCloud: apagar AI/auto-reply propio.
