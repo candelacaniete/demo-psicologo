@@ -23,6 +23,7 @@ type YCloudIncomingMessage = {
 type YCloudWebhookBody = {
   id?: string;
   type?: string;
+  whatsappInboundMessage?: YCloudIncomingMessage;
   whatsappMessage?: YCloudIncomingMessage;
   data?: YCloudIncomingMessage;
 };
@@ -73,7 +74,11 @@ export class YCloudAdapter {
 
   static parseWebhook(body: unknown): StandardMessage | null {
     const payload = body as YCloudWebhookBody;
-    const message = payload.whatsappMessage ?? payload.data;
+    // YCloud docs use `whatsappInboundMessage`; keep legacy aliases too.
+    const message =
+      payload.whatsappInboundMessage ??
+      payload.whatsappMessage ??
+      payload.data;
 
     if (!message?.from) {
       return null;

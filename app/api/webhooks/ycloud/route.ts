@@ -15,6 +15,8 @@ export async function GET() {
     service: "ycloud-webhook",
     mode: "user_initiated_openai_agent",
     message: "Webhook endpoint ready",
+    recommendedUrl: "https://www.katem.store/api/webhooks/ycloud",
+    event: "whatsapp.inbound_message.received",
   });
 }
 
@@ -79,6 +81,10 @@ async function findLeadByPhone(
 export async function POST(request: Request) {
   try {
     const body: unknown = await request.json();
+    const eventType =
+      body && typeof body === "object" && "type" in body
+        ? String((body as { type?: string }).type ?? "")
+        : "";
     const incoming = YCloudAdapter.parseWebhook(body);
 
     if (
@@ -87,10 +93,18 @@ export async function POST(request: Request) {
       (!incoming.text && !incoming.buttonId && !incoming.listId)
     ) {
       console.info("[ycloud webhook] ignored payload", {
+        eventType,
         hasIncoming: Boolean(incoming),
         type: incoming?.type,
+        keys:
+          body && typeof body === "object"
+            ? Object.keys(body as object)
+            : [],
       });
-      return NextResponse.json({ ok: true, ignored: true }, { status: 200 });
+      return NextResponse.json(
+        { ok: true, ignored: true, eventType },
+        { status: 200 },
+      );
     }
 
     const userMessageContent =
