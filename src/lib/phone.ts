@@ -46,7 +46,7 @@ export function phoneLookupVariants(phone: string): string[] {
   // Normalized AR form
   variants.add(normalizePhone(d, "54"));
 
-  return [...variants];
+  return Array.from(variants);
 }
 
 /** Loose match: same national number ignoring AR mobile 9. */
