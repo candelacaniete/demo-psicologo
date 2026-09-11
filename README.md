@@ -1,41 +1,37 @@
 # Katem — Landings de conversión multi-nicho
 
-Dominio raíz: **katem.store**
+Dominio: **katem.store**
 
-## Flujo WhatsApp (Plan B — activo)
+## Flujo WhatsApp (único)
 
-Sin plantillas ni display name de Meta:
+1. Form → califica y guarda en Supabase  
+2. CTA **Enviar por WhatsApp** (`wa.me` con datos precargados)  
+3. Cliente envía → ventana 24h  
+4. Webhook YCloud → **OpenAI** responde (YCloud solo transporta)
 
-1. Lead completa el form (calificación HOT/WARM/COLD en DB)  
-2. CTA **Enviar por WhatsApp** (`wa.me` con mensaje precargado)  
-3. El cliente **envía** ese mensaje → se abre ventana 24h  
-4. Webhook YCloud → agente IA responde en texto libre  
+**No se envían plantillas** desde el formulario.
 
-`WHATSAPP_HANDSHAKE_MODE=user_initiated`
+## Env Vercel
 
-Más adelante (cuando Meta termine display name): `=template`.
+| Variable | Origen |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase → API → Project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Publishable (`sb_publishable_...`) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Secret (`sb_secret_...`) |
+| `NEXT_PUBLIC_ROOT_DOMAIN` | `katem.store` |
+| `YCLOUD_API_KEY` | YCloud API key |
+| `YCLOUD_WHATSAPP_FROM` | `+15553082749` |
+| `WHATSAPP_HANDSHAKE_MODE` | `user_initiated` |
+| `OPENAI_API_KEY` | OpenAI |
+| `OPENAI_MODEL` | `gpt-4o-mini` |
 
-## Env en Vercel
-
-Ver `.env.example`. Mínimo:
-
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` → **publishable** (`sb_publishable_...`)
-- `SUPABASE_SERVICE_ROLE_KEY` → **secret** (`sb_secret_...`)
-- `YCLOUD_API_KEY` / `YCLOUD_WHATSAPP_FROM`
-- `WHATSAPP_HANDSHAKE_MODE=user_initiated`
-- `OPENAI_API_KEY` / `OPENAI_MODEL`
-- `NEXT_PUBLIC_ROOT_DOMAIN=katem.store`
-
-Webhook YCloud: `https://katem.store/api/webhooks/ycloud`  
+Webhook: `https://katem.store/api/webhooks/ycloud`  
 evento: `whatsapp.inbound_message.received`
 
-## SQL Supabase
+En YCloud: apagar AI/auto-reply propio.
 
-1. `supabase/schema.sql` (si es proyecto nuevo)  
+## SQL
+
+1. `supabase/schema.sql`  
 2. `supabase/migration_multidomain.sql`  
 3. `supabase/migration_funnel_events.sql`
-
-## Rutas
-
-`/` hub · `/inmobiliaria|/arquitectos|/abogados|/hospedajes` · `/admin` · `/funnel` alias

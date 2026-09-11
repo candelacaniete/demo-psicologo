@@ -5,7 +5,7 @@ import {
   defaultClientIdForNiche,
   getTenantById,
 } from "@/src/config/tenants";
-import { YCloudAdapter } from "@/src/lib/adapters/ycloud.adapter";
+import { normalizePhone } from "@/src/lib/phone";
 import {
   buildHandshakeMessage,
   buildWhatsAppDeepLink,
@@ -16,26 +16,10 @@ import {
 } from "@/src/lib/qualification/formQualify";
 import type { CaptureLeadPayload, Lead } from "@/src/types/funnel";
 
-function normalizePhone(phone: string, countryCode = "54"): string {
-  let digits = phone.replace(/[^\d]/g, "");
-
-  if (countryCode === "54") {
-    if (digits.startsWith("549")) return digits;
-    if (digits.startsWith("54") && !digits.startsWith("549")) {
-      return `549${digits.slice(2)}`;
-    }
-    if (digits.startsWith("9")) return `54${digits}`;
-    if (digits.startsWith("0")) digits = digits.replace(/^0+/, "");
-    return `549${digits}`;
-  }
-
-  if (digits.startsWith(countryCode)) return digits;
-  if (digits.startsWith("0")) {
-    return `${countryCode}${digits.replace(/^0+/, "")}`;
-  }
-  return `${countryCode}${digits}`;
-}
-
+/**
+ * Plan B only: save + qualify lead, return wa.me deep link.
+ * Never sends WhatsApp templates (avoids Meta display-name / marketing blocks).
+ */
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Partial<CaptureLeadPayload>;
@@ -110,18 +94,11 @@ export async function POST(request: Request) {
 
     await supabase.from("conversations").delete().eq("lead_id", lead.id);
 
-    // Default Plan B: client opens WhatsApp first (wa.me) → 24h window → AI agent.
-    // Optional Plan A: WHATSAPP_HANDSHAKE_MODE=template (needs Meta display name + approved template).
-    const configuredMode = (
-      process.env.WHATSAPP_HANDSHAKE_MODE || "user_initiated"
-    ).toLowerCase();
-    const preferTemplate = configuredMode === "template";
-
     const collectedData = {
       nombre: name,
       initial_interest: initialInterest,
       tenant_id: tenant.id,
-      handshake_mode: preferTemplate ? "template" : "user_initiated",
+      handshake_mode: "user_initiated",
       qualification_score: qualification.score,
       qualification_reasons: qualification.reasons,
       ...qualification.collectedData,
@@ -162,68 +139,10 @@ export async function POST(request: Request) {
       handshakeMessage,
     );
 
-    let templateSent = false;
-    let templateSkipped = false;
-    let templateError: string | null = null;
-    const templateName =
-      process.env.YCLOUD_WELCOME_TEMPLATE_NAME || "followuplead";
-    const templateLanguage =
-      process.env.YCLOUD_WELCOME_TEMPLATE_LANG || "es";
-    const templateCategory =
-      process.env.YCLOUD_WELCOME_TEMPLATE_CATEGORY || "MARKETING";
-
-    if (preferTemplate && qualification.status === "DISCARDED") {
-      templateSkipped = true;
-    } else if (preferTemplate) {
-      try {
-        if (!tenant.ycloud_api_key || !tenant.whatsapp_from) {
-          throw new Error(
-            "Tenant missing YCloud API key or WhatsApp From number",
-          );
-        }
-        const adapter = new YCloudAdapter(
-          tenant.ycloud_api_key,
-          tenant.whatsapp_from,
-        );
-        await adapter.sendTemplate(phone, templateName, templateLanguage, [
-          { name: "nombres", text: name },
-          { name: "empresa", text: tenant.name },
-        ]);
-        templateSent = true;
-      } catch (error) {
-        templateError =
-          error instanceof Error ? error.message : "Template send failed";
-        console.error("Template welcome failed; using wa.me handshake", {
-          templateError,
-          templateName,
-          phone,
-          tenantId: tenant.id,
-        });
-      }
-    }
-
-    const effectiveHandshake = templateSent ? "template" : "user_initiated";
-
-    await supabase
-      .from("conversations")
-      .update({
-        collected_data: {
-          ...collectedData,
-          handshake_mode: effectiveHandshake,
-          template_sent: templateSent,
-          template_error: templateError,
-          template_skipped: templateSkipped,
-          template_name: preferTemplate ? templateName : null,
-        },
-      })
-      .eq("id", conversation.id);
-
     await supabase.from("messages").insert({
       lead_id: lead.id,
       sender: "bot",
-      content: templateSent
-        ? `Consulta calificada (${qualification.status}). Template ${templateName} enviado.`
-        : `Consulta calificada (${qualification.status}). Esperando primer mensaje del cliente por WhatsApp.`,
+      content: `Consulta calificada (${qualification.status}). Esperando primer mensaje del cliente por WhatsApp.`,
       raw_payload: {
         type: "form_qualification",
         tenant_id: tenant.id,
@@ -232,25 +151,19 @@ export async function POST(request: Request) {
         reasons: qualification.reasons,
         collectedData: qualification.collectedData,
         whatsappDeepLink,
-        handshakeMode: effectiveHandshake,
+        handshakeMode: "user_initiated",
         handshakeMessage,
-        templateSent,
-        templateSkipped,
-        templateError,
-        templateName: preferTemplate ? templateName : null,
-        templateCategory: preferTemplate ? templateCategory : null,
+        templateSent: false,
       },
     });
 
     return NextResponse.json(
       {
         ok: true,
-        handshakeMode: effectiveHandshake,
+        handshakeMode: "user_initiated",
         whatsappDeepLink,
         handshakeMessage,
-        templateSent,
-        templateSkipped,
-        templateError,
+        templateSent: false,
         qualification: {
           score: qualification.score,
           status: qualification.status,
